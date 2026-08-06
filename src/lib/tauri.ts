@@ -94,11 +94,87 @@ export function readHeapMB(): number | null {
   return +(mem.usedJSHeapSize / 1024 / 1024).toFixed(1);
 }
 
+let lastOcrSim = '';
+let lastJsonSim = '';
+
+function resolveSimVars(text: string): string {
+  return text
+    .replaceAll('{DATE}', new Date().toISOString().slice(0,10))
+    .replaceAll('{TIME}', new Date().toLocaleTimeString())
+    .replaceAll('{USER}', 'demo')
+    .replaceAll('{DOCS_PATH}', 'C:\\Users\\Demo\\Documents')
+    .replaceAll('{OCR_TEXT}', lastOcrSim || 'Sample OCR text')
+    .replaceAll('{JSON_VALUE}', lastJsonSim || '')
+    .replaceAll('{CLIPBOARD}', lastOcrSim || 'clipboard');
+}
+
 export async function executeNode(kind: string, config: Record<string, string>): Promise<string> {
-  if (!isTauri()) return 'Simulated';
+  if (!isTauri()) {
+    // High-quality simulated execution for browser preview
+    const cfg = Object.fromEntries(Object.entries(config).map(([k,v])=>[k, resolveSimVars(v)]));
+    await new Promise(r=> setTimeout(r, 80 + Math.random()*120));
+    switch(kind){
+      case 'delay': return `Delayed ${cfg.ms||500} ms`;
+      case 'ocr_screen': {
+        const lang = cfg.lang||'eng';
+        const sample = `Invoice INV-2024-001 Total $299.99 Date ${new Date().toISOString().slice(0,10)} Lang:${lang} — high-accuracy OCR (simulated tesseract+WinRT)`;
+        lastOcrSim = sample;
+        return `OCR OK (${lang}): ${sample.slice(0,80)}`;
+      }
+      case 'find_image': return `Found '${cfg.template||'button.png'}' at 500,300 (simulated)`;
+      case 'json_parse': {
+        try{
+          const v = JSON.parse(cfg.json||'{}');
+          const path = (cfg.path||'$').replace(/^\$\.?/,'');
+          let cur:any = v;
+          if(path) for(const p of path.split('.')){ if(p && cur) cur = cur[p]; }
+          const res = typeof cur==='string'? cur : JSON.stringify(cur);
+          lastJsonSim = res;
+          return `JSON parsed -> ${res.slice(0,80)}`;
+        }catch(e:any){ throw new Error('JSON parse error: '+e.message); }
+      }
+      case 'for_each': {
+        const items = cfg.items||'a,b,c';
+        const delim = cfg.delimiter==='\\n'? '\n' : (cfg.delimiter||',');
+        const cnt = items.split(delim).filter(Boolean).length;
+        return `ForEach ${cnt} items`;
+      }
+      case 'http_request': {
+        const m = cfg.method||'GET';
+        return `HTTP ${m} ${cfg.url||''} -> 200 OK (sim)`;
+      }
+      case 'file_write': return 'Written to file (sim)';
+      case 'lock_pc': return 'PC locked (sim)';
+      case 'volume_control': return `Volume ${cfg.level||50}% (sim)`;
+      case 'file_watcher': return `Watcher '${cfg.path}' -> exists (sim)`;
+      case 'at_time': return `AtTime '${cfg.cron}' checked (sim)`;
+      case 'powershell': return 'PowerShell OK (sim)';
+      case 'condition': {
+        // simple: if contains len and >0 => true if not empty
+        const expr = cfg.expr||'';
+        if(expr.includes('len(') && expr.includes('> 0')) return 'true';
+        if(expr.includes('==')) return expr.split('==')[0].trim() === expr.split('==')[1].trim() ? 'true' : 'false';
+        return 'true';
+      }
+      case 'repeat': return `Loop step (${cfg.count||3})`;
+      default: return 'Simulated';
+    }
+  }
+  // Tauri path: resolve vars already handled in Rust, but also handle frontend var cache for consistency
   const { invoke } = await import('@tauri-apps/api/core');
   try {
-    return await invoke<string>('execute_node', { kind, config });
+    const res = await invoke<string>('execute_node', { kind, config });
+    // update sim caches from real result for browser consistency (not needed in Tauri but helps)
+    if(kind==='ocr_screen'){
+      // try to extract OCR text from res: "OCR OK (eng): <text>"
+      const m = res.match(/:\s*(.*)/);
+      if(m) lastOcrSim = m[1].slice(0,500);
+    }
+    if(kind==='json_parse'){
+      const m = res.match(/->\s*(.*)/);
+      if(m) lastJsonSim = m[1].slice(0,500);
+    }
+    return res;
   } catch (err: any) {
     throw new Error(err.toString());
   }

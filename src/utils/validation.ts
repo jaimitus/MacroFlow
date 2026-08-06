@@ -58,6 +58,10 @@ export function validateNode(node: FlowNode, edges: FlowEdge[], allNodes: FlowNo
     }
     case 'http_request': {
       if (isEmpty(cfg.url)) issues.push({ level: 'error', msg: 'url required' });
+      else if (!/^https?:\/\//i.test(cfg.url.trim())) issues.push({ level: 'warn', msg: 'should start with http' });
+      if (cfg.headers && cfg.headers.trim().length>0) {
+        try { JSON.parse(cfg.headers); } catch { issues.push({ level: 'warn', msg: 'headers should be JSON' }); }
+      }
       break;
     }
     case 'file_write': {
@@ -82,6 +86,40 @@ export function validateNode(node: FlowNode, edges: FlowEdge[], allNodes: FlowNo
       if (cfg.else && !allNodes.some(n=>n.id===cfg.else)) issues.push({ level: 'warn', msg: `else target ${cfg.else} missing` });
       break;
     }
+    case 'ocr_screen': {
+      if (isEmpty(cfg.lang)) issues.push({ level: 'warn', msg: 'lang default eng' });
+      if (cfg.psm && (isNaN(Number(cfg.psm)) || Number(cfg.psm)<0 || Number(cfg.psm)>13)) issues.push({ level: 'warn', msg: 'psm 0-13' });
+      break;
+    }
+    case 'find_image': {
+      if (isEmpty(cfg.template)) issues.push({ level: 'error', msg: 'template image required' });
+      if (cfg.threshold && (isNaN(Number(cfg.threshold)) || Number(cfg.threshold)<0 || Number(cfg.threshold)>1)) issues.push({ level: 'warn', msg: 'threshold 0-1' });
+      break;
+    }
+    case 'for_each': {
+      if (isEmpty(cfg.items)) issues.push({ level: 'error', msg: 'items required' });
+      break;
+    }
+    case 'json_parse': {
+      if (isEmpty(cfg.json)) issues.push({ level: 'error', msg: 'json required' });
+      if (isEmpty(cfg.path)) issues.push({ level: 'warn', msg: 'JSONPath empty' });
+      break;
+    }
+    case 'volume_control': {
+      if (isEmpty(cfg.level)) issues.push({ level: 'error', msg: 'level required' });
+      else if (isNaN(Number(cfg.level)) || Number(cfg.level)<0 || Number(cfg.level)>100) issues.push({ level: 'error', msg: 'level 0-100' });
+      break;
+    }
+    case 'file_watcher': {
+      if (isEmpty(cfg.path)) issues.push({ level: 'error', msg: 'path required' });
+      break;
+    }
+    case 'at_time': {
+      if (isEmpty(cfg.cron)) issues.push({ level: 'error', msg: 'cron required' });
+      else if (!/^(\S+\s+){4}\S+$/.test(cfg.cron.trim()) && !/^\d{1,2}:\d{2}$/.test(cfg.cron.trim())) issues.push({ level: 'warn', msg: 'cron like \"0 9 * * 1\" or \"09:00\"' });
+      break;
+    }
+    case 'lock_pc': break;
     default: break;
   }
 

@@ -69,12 +69,13 @@ export default function Designer(p: DesignerProps) {
   const [scrollPos, setScrollPos] = useState({ left: 0, top: 0, w: 0, h: 0 });
   const [showHelp, setShowHelp] = useState(false);
   const PALETTE_GROUPS: Array<{id:string, label:string, icon:string, kinds: NodeKind[]}> = [
-    {id:'triggers', label:'TRIGGERS', icon:'zap', kinds:['hotkey','window_focus','schedule','startup','clipboard']},
+    {id:'triggers', label:'TRIGGERS', icon:'zap', kinds:['hotkey','window_focus','schedule','at_time','file_watcher','startup','clipboard']},
     {id:'input', label:'Input', icon:'type', kinds:['send_keys','mouse_click','mouse_move']},
-    {id:'system', label:'System', icon:'monitor', kinds:['open_app','close_app','focus_window','open_url','take_screenshot']},
-    {id:'logic', label:'Flow', icon:'branch', kinds:['delay','condition','repeat']},
+    {id:'system', label:'System', icon:'monitor', kinds:['open_app','close_app','focus_window','open_url','take_screenshot','lock_pc','volume_control']},
+    {id:'vision', label:'Vision', icon:'eye', kinds:['ocr_screen','find_image']},
+    {id:'logic', label:'Flow', icon:'branch', kinds:['delay','condition','repeat','for_each']},
     {id:'ui', label:'Notification', icon:'bell', kinds:['notification','play_sound']},
-    {id:'data', label:'Data & Network', icon:'globe', kinds:['clipboard_set','http_request','file_write','web_search','powershell']},
+    {id:'data', label:'Data & Network', icon:'globe', kinds:['clipboard_set','http_request','file_write','web_search','powershell','json_parse']},
   ];
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(()=>{
     try { const raw = JSON.parse(localStorage.getItem('macroflow.palette.collapsed')||'[]'); return new Set(raw); } catch { return new Set(['system','ui','data']); }

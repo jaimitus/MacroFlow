@@ -348,7 +348,7 @@ export default function App() {
                           : kind === 'take_screenshot'
                             ? { filename: 'screenshot.png' }
                             : kind === 'http_request'
-                              ? { url: 'https://api.example.com', method: 'GET' }
+                              ? { url: 'https://api.example.com', method: 'GET', headers: '', body: '' }
                               : kind === 'file_write'
                                 ? { path: '{DOCS_PATH}\\output.txt', content: 'Hello {DATE}' }
                                 : kind === 'web_search'
@@ -357,7 +357,23 @@ export default function App() {
                                     ? { count: '3' }
                                     : kind === 'condition'
                                       ? { expr: 'len({CLIPBOARD}) > 0', then: '', else: '' }
-                                      : { value: '…' };
+                                      : kind === 'ocr_screen'
+                                        ? { lang: 'eng', psm: '6', region: 'full' }
+                                        : kind === 'find_image'
+                                          ? { template: 'button.png', threshold: '0.8' }
+                                          : kind === 'for_each'
+                                            ? { items: '{CLIPBOARD}', delimiter: '\\n' }
+                                            : kind === 'json_parse'
+                                              ? { json: '{"key":"value"}', path: '$.key' }
+                                              : kind === 'lock_pc'
+                                                ? {}
+                                                : kind === 'volume_control'
+                                                  ? { level: '50' }
+                                                  : kind === 'file_watcher'
+                                                    ? { path: '{DOCS_PATH}\\watch.txt', interval: '1000' }
+                                                    : kind === 'at_time'
+                                                      ? { cron: '0 9 * * 1', timezone: 'local' }
+                                                      : { value: '…' };
       const node: Flow['nodes'][number] = {
         id,
         kind,
@@ -475,8 +491,24 @@ export default function App() {
         const id = q.shift()!;
         const node = targetFlow.nodes.find((n) => n.id === id);
         if (!node) continue;
-        if (node.kind === 'repeat') {
-          const maxLoops = parseInt(node.config.count || '3', 10);
+        if (node.kind === 'repeat' || node.kind === 'for_each') {
+          let maxLoops: number;
+          if (node.kind === 'for_each') {
+            const raw = node.config.items || '';
+            // Resolve simple vars for accurate loop count (OCR_TEXT, CLIPBOARD)
+            let resolved = raw;
+            // crude front-end var resolve for demo (Rust does real resolve)
+            if (resolved.includes('{OCR_TEXT}')) resolved = resolved.replaceAll('{OCR_TEXT}', 'line1\nline2\nline3');
+            if (resolved.includes('{CLIPBOARD}')) resolved = resolved.replaceAll('{CLIPBOARD}', 'a,b,c');
+            const delimRaw = node.config.delimiter || ',';
+            const delim = delimRaw === '\\n' ? '\n' : delimRaw;
+            const parts = resolved.split(delim).filter(s=> s.trim().length>0);
+            maxLoops = Math.max(1, parts.length);
+            // cap for safety
+            maxLoops = Math.min(maxLoops, 20);
+          } else {
+            maxLoops = parseInt(node.config.count || '3', 10);
+          }
           const currentLoop = (repeatCounts.get(id) || 0) + 1;
           repeatCounts.set(id, currentLoop);
           if (currentLoop > maxLoops) {

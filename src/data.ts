@@ -4,6 +4,8 @@ export const PALETTE: PaletteItem[] = [
   { kind: 'hotkey', label: 'Global Hotkey', cat: 'trigger', icon: 'keyboard', color: '#0078D4', desc: 'Ctrl+Alt+?' },
   { kind: 'window_focus', label: 'Window Focus', cat: 'trigger', icon: 'window', color: '#0078D4', desc: 'window activated' },
   { kind: 'schedule', label: 'Scheduled', cat: 'trigger', icon: 'clock', color: '#0078D4', desc: 'interval / time' },
+  { kind: 'at_time', label: 'At Time', cat: 'trigger', icon: 'clock', color: '#0078D4', desc: 'cron at 09:00' },
+  { kind: 'file_watcher', label: 'File Watcher', cat: 'trigger', icon: 'file', color: '#0078D4', desc: 'file changed' },
   { kind: 'startup', label: 'On Startup', cat: 'trigger', icon: 'power', color: '#0078D4', desc: 'app launch' },
   { kind: 'clipboard', label: 'Clipboard Change', cat: 'trigger', icon: 'copy', color: '#0078D4', desc: 'text copied' },
   { kind: 'send_keys', label: 'Send Keystrokes', cat: 'action', icon: 'type', color: '#4A5568', desc: 'type text' },
@@ -12,6 +14,8 @@ export const PALETTE: PaletteItem[] = [
   { kind: 'close_app', label: 'Close App', cat: 'action', icon: 'x', color: '#D13438', desc: 'kill process' },
   { kind: 'open_url', label: 'Open URL', cat: 'action', icon: 'globe', color: '#0078D4', desc: 'launch browser' },
   { kind: 'take_screenshot', label: 'Screenshot', cat: 'action', icon: 'camera', color: '#E01765', desc: 'save display' },
+  { kind: 'ocr_screen', label: 'OCR Screen', cat: 'action', icon: 'eye', color: '#E01765', desc: 'read text via OCR' },
+  { kind: 'find_image', label: 'Find Image', cat: 'action', icon: 'search', color: '#2B3A55', desc: 'locate on screen' },
   { kind: 'powershell', label: 'Run Script', cat: 'action', icon: 'terminal', color: '#0F6CBD', desc: 'PowerShell' },
   { kind: 'delay', label: 'Wait', cat: 'action', icon: 'timer', color: '#5C6370', desc: 'pause ms' },
   { kind: 'condition', label: 'Condition', cat: 'action', icon: 'branch', color: '#D83B01', desc: 'if / else' },
@@ -24,6 +28,10 @@ export const PALETTE: PaletteItem[] = [
   { kind: 'play_sound', label: 'Play Sound', cat: 'action', icon: 'bell', color: '#E01765', desc: 'beep alert' },
   { kind: 'web_search', label: 'Web Search', cat: 'action', icon: 'search', color: '#0078D4', desc: 'instant search' },
   { kind: 'repeat', label: 'Loop / Repeat', cat: 'action', icon: 'refresh', color: '#D83B01', desc: 'repeat N times' },
+  { kind: 'for_each', label: 'For Each', cat: 'action', icon: 'refresh', color: '#D83B01', desc: 'loop each item' },
+  { kind: 'json_parse', label: 'JSON Parse', cat: 'action', icon: 'braces', color: '#0F6CBD', desc: 'parse JSON' },
+  { kind: 'lock_pc', label: 'Lock PC', cat: 'action', icon: 'shield', color: '#5C6370', desc: 'lock workstation' },
+  { kind: 'volume_control', label: 'Volume', cat: 'action', icon: 'bell', color: '#107C10', desc: 'set volume %' },
 ];
 
 export const VARIABLES = [
@@ -33,6 +41,8 @@ export const VARIABLES = [
   { token: '{ACTIVE_WINDOW}', type: 'string', desc: 'focused window title' },
   { token: '{USER}', type: 'string', desc: 'current username' },
   { token: '{DOCS_PATH}', type: 'string', desc: 'Documents folder path' },
+  { token: '{OCR_TEXT}', type: 'string', desc: 'last OCR result' },
+  { token: '{JSON_VALUE}', type: 'string', desc: 'last JSON parse result' },
 ];
 
 export const DEFAULT_FLOWS: Flow[] = [
@@ -112,6 +122,31 @@ export const DEFAULT_FLOWS: Flow[] = [
       { from: 'a3_delay', to: 'a3_focus' },
       { from: 'a3_focus', to: 'a4' },
       { from: 'a2', to: 'a5' },
+    ],
+  },
+  {
+    id: 'flow-ocr',
+    name: '🔍 OCR Invoice Scanner Pro',
+    description: 'High-accuracy OCR (Tesseract/WinRT) → clipboard → JSON parse → For Each loop → secure save',
+    enabled: true,
+    nodes: [
+      { id: 't1', kind: 'hotkey', category: 'trigger', label: 'Scan Trigger', x: 40, y: 80, config: { hotkey: 'Run' }, color: '#0078D4', icon: 'keyboard' },
+      { id: 'a1_ocr', kind: 'ocr_screen', category: 'action', label: 'OCR Screen', x: 260, y: 80, config: { lang: 'eng', psm: '6', region: 'full' }, color: '#E01765', icon: 'eye' },
+      { id: 'a2_clip', kind: 'clipboard_set', category: 'action', label: 'Copy OCR', x: 480, y: 80, config: { value: '{OCR_TEXT}' }, color: '#8764B8', icon: 'clipboard' },
+      { id: 'a3_json', kind: 'json_parse', category: 'action', label: 'Parse JSON', x: 700, y: 80, config: { json: '{OCR_TEXT}', path: '$.total' }, color: '#0F6CBD', icon: 'braces' },
+      { id: 'a4_each', kind: 'for_each', category: 'action', label: 'For Each Line', x: 920, y: 80, config: { items: '{OCR_TEXT}', delimiter: '\\n' }, color: '#D83B01', icon: 'refresh' },
+      { id: 'a5_write', kind: 'file_write', category: 'action', label: 'Save Report', x: 1140, y: 80, config: { path: '{DOCS_PATH}\\ocr_report.txt', content: 'OCR at {DATE} {TIME}: {OCR_TEXT} | JSON: {JSON_VALUE}' }, color: '#107C10', icon: 'terminal' },
+      { id: 'a6_notify', kind: 'notification', category: 'action', label: 'Done', x: 1360, y: 80, config: { title: 'OCR Complete', body: 'Extracted {OCR_TEXT}' }, color: '#107C10', icon: 'bell' },
+      { id: 'a7_lock', kind: 'lock_pc', category: 'action', label: 'Lock PC', x: 1580, y: 80, config: {}, color: '#5C6370', icon: 'shield' },
+    ],
+    edges: [
+      { from: 't1', to: 'a1_ocr' },
+      { from: 'a1_ocr', to: 'a2_clip' },
+      { from: 'a2_clip', to: 'a3_json' },
+      { from: 'a3_json', to: 'a4_each' },
+      { from: 'a4_each', to: 'a5_write' },
+      { from: 'a5_write', to: 'a6_notify' },
+      { from: 'a6_notify', to: 'a7_lock' },
     ],
   },
 ];

@@ -1,7 +1,7 @@
 export type TabId = 'dashboard' | 'designer' | 'settings';
 
 export type NodeCategory = 'trigger' | 'action';
-export type TriggerKind = 'hotkey' | 'window_focus' | 'startup' | 'schedule' | 'clipboard';
+export type TriggerKind = 'hotkey' | 'window_focus' | 'startup' | 'schedule' | 'clipboard' | 'file_watcher' | 'at_time';
 export type ActionKind =
   | 'send_keys'
   | 'mouse_click'
@@ -20,7 +20,13 @@ export type ActionKind =
   | 'file_write'
   | 'play_sound'
   | 'web_search'
-  | 'repeat';
+  | 'repeat'
+  | 'ocr_screen'
+  | 'find_image'
+  | 'for_each'
+  | 'json_parse'
+  | 'lock_pc'
+  | 'volume_control';
 export type NodeKind = TriggerKind | ActionKind;
 
 export interface FlowNode {
