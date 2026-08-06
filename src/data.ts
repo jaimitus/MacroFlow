@@ -19,6 +19,9 @@ export const PALETTE: PaletteItem[] = [
   { kind: 'open_app', label: 'Launch App', cat: 'action', icon: 'send', color: '#8764B8', desc: 'open program' },
   { kind: 'focus_window', label: 'Focus Window', cat: 'action', icon: 'eye', color: '#8764B8', desc: 'bring to front' },
   { kind: 'clipboard_set', label: 'Set Clipboard', cat: 'action', icon: 'clipboard', color: '#8764B8', desc: 'write text' },
+  { kind: 'http_request', label: 'HTTP Request', cat: 'action', icon: 'globe', color: '#0F6CBD', desc: 'GET/POST API' },
+  { kind: 'file_write', label: 'Write File', cat: 'action', icon: 'terminal', color: '#107C10', desc: 'save text' },
+  { kind: 'play_sound', label: 'Play Sound', cat: 'action', icon: 'bell', color: '#E01765', desc: 'beep alert' },
 ];
 
 export const VARIABLES = [
@@ -34,18 +37,20 @@ export const DEFAULT_FLOWS: Flow[] = [
   {
     id: 'flow-1',
     name: 'Web Search Automation',
-    description: 'Opens a browser, waits to load, and performs a search automatically',
+    description: 'Opens DuckDuckGo, focuses browser, and types search query automatically',
     enabled: true,
     nodes: [
       { id: 't1', kind: 'hotkey', category: 'trigger', label: 'Trigger', x: 40, y: 150, config: { hotkey: 'Run' }, color: '#0078D4', icon: 'keyboard' },
       { id: 'a1', kind: 'open_url', category: 'action', label: 'Open DuckDuckGo', x: 260, y: 150, config: { url: 'https://duckduckgo.com' }, color: '#8764B8', icon: 'send' },
-      { id: 'a2', kind: 'delay', category: 'action', label: 'Wait for load', x: 480, y: 150, config: { ms: '4000' }, color: '#5C6370', icon: 'timer' },
-      { id: 'a3', kind: 'send_keys', category: 'action', label: 'Search query', x: 700, y: 150, config: { keys: 'MacroFlow automation tool{ENTER}' }, color: '#4A5568', icon: 'type' },
+      { id: 'a2', kind: 'delay', category: 'action', label: 'Wait for load', x: 480, y: 150, config: { ms: '2500' }, color: '#5C6370', icon: 'timer' },
+      { id: 'a2_focus', kind: 'focus_window', category: 'action', label: 'Focus Browser', x: 700, y: 150, config: { title: 'DuckDuckGo' }, color: '#8764B8', icon: 'eye' },
+      { id: 'a3', kind: 'send_keys', category: 'action', label: 'Search query', x: 920, y: 150, config: { keys: 'MacroFlow automation tool{ENTER}' }, color: '#4A5568', icon: 'type' },
     ],
     edges: [
       { from: 't1', to: 'a1' },
       { from: 'a1', to: 'a2' },
-      { from: 'a2', to: 'a3' },
+      { from: 'a2', to: 'a2_focus' },
+      { from: 'a2_focus', to: 'a3' },
     ],
   },
   {

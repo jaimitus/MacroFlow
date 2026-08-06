@@ -247,6 +247,33 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
 
             if result { Ok("true".to_string()) } else { Ok("false".to_string()) }
         }
+        "http_request" => {
+            let url = config.get("url").cloned().unwrap_or_default();
+            let method = config.get("method").cloned().unwrap_or_else(|| "GET".to_string());
+            let script = format!("Invoke-RestMethod -Uri '{}' -Method {}", url.replace("'", "''"), method);
+            let _ = std::process::Command::new("powershell")
+                .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
+                .creation_flags(CREATE_NO_WINDOW)
+                .status();
+            Ok(format!("HTTP {} sent to {}", method, url))
+        }
+        "file_write" => {
+            let path = config.get("path").cloned().unwrap_or_else(|| "$env:USERPROFILE\\Documents\\output.txt".to_string());
+            let content = config.get("content").cloned().unwrap_or_default();
+            let script = format!("Add-Content -Path '{}' -Value '{}'", path.replace("'", "''"), content.replace("'", "''"));
+            let _ = std::process::Command::new("powershell")
+                .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
+                .creation_flags(CREATE_NO_WINDOW)
+                .status();
+            Ok("Written to file".to_string())
+        }
+        "play_sound" => {
+            let _ = std::process::Command::new("powershell")
+                .args(&["-NoProfile", "-NonInteractive", "-Command", "[System.Media.SystemSounds]::Beep.Play()"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .status();
+            Ok("Sound played".to_string())
+        }
         _ => Ok("Simulated (Not fully implemented yet)".into())
     }
 }

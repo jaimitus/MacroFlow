@@ -64,8 +64,9 @@ function readStoredFlows(): Flow[] {
     const stored = JSON.parse(localStorage.getItem(FLOWS_STORAGE_KEY) ?? 'null') as Flow[] | null;
     if (!stored || !Array.isArray(stored) || stored.length === 0) return DEFAULT_FLOWS;
     
-    // Migration: If they have the old Calculator demo, reset it so they get the fresh DuckDuckGo and CMD demos.
-    if (stored.some(f => f.description.includes('Calculator robustly'))) return DEFAULT_FLOWS;
+    // Migration: If they have old flows without Focus Browser in flow-1, reset it so they get the working web demo and new nodes.
+    const f1 = stored.find(f => f.id === 'flow-1');
+    if (!f1 || !f1.nodes.some(n => n.id === 'a2_focus')) return DEFAULT_FLOWS;
 
     return stored;
   } catch {

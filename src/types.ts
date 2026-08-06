@@ -12,7 +12,13 @@ export type ActionKind =
   | 'notification'
   | 'open_app'
   | 'focus_window'
-  | 'clipboard_set';
+  | 'clipboard_set'
+  | 'open_url'
+  | 'close_app'
+  | 'take_screenshot'
+  | 'http_request'
+  | 'file_write'
+  | 'play_sound';
 export type NodeKind = TriggerKind | ActionKind;
 
 export interface FlowNode {
