@@ -151,10 +151,9 @@ export default function Designer(p: DesignerProps) {
             }}
             style={{
               width: `${Math.max(2800, ...p.nodes.map((n) => n.x + 400))}px`,
-              height: '100%',
-              minHeight: '100%',
+              minHeight: `${Math.max(750, ...p.nodes.map((n) => n.y + 250))}px`,
             }}
-            className="relative dot-grid"
+            className="relative dot-grid h-full"
           >
             <svg className="absolute inset-0 w-full h-full pointer-events-none">
             {p.edges.map((e, i) => {
@@ -282,7 +281,7 @@ export default function Designer(p: DesignerProps) {
         </div>
       </div>
 
-        {/* Inspector */}
+      {/* Inspector */}
         <div className="w-[264px] bg-surface border-l border-line p-3.5 space-y-3 overflow-auto custom-scrollbar hidden lg:block">
           <h4 className="text-[12px] font-bold text-ink flex items-center gap-2">
             <Icon name="sliders" size={13} className="text-ink-3" /> Inspector
