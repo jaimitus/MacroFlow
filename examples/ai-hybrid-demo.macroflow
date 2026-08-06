@@ -1,7 +1,7 @@
 {
   "id": "flow-ai",
-  "name": "🤖 AI Hybrid — OCR + Prompt + Vision",
-  "description": "Ollama local (llama3.2/llava) with OpenAI fallback via Vault — summarize OCR, smart condition, vision describe",
+  "name": "\ud83e\udd16 AI Hybrid \u2014 OCR + Prompt + Vision",
+  "description": "Ollama local (llama3.2/llava) with OpenAI fallback via Vault \u2014 summarize OCR, smart condition, vision describe",
   "enabled": true,
   "nodes": [
     {
@@ -58,7 +58,9 @@
       "config": {
         "provider": "auto",
         "model": "llama3.2",
-        "question": "Is this invoice total > 100? Answer true or false: {OCR_TEXT}"
+        "question": "Is this invoice total > 100? Answer true or false: {OCR_TEXT}",
+        "then": "a4_true",
+        "else": "a4_false"
       },
       "color": "#D83B01",
       "icon": "branch"
