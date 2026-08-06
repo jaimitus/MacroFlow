@@ -1,6 +1,6 @@
-# 🔍 OCR Guide — MacroFlow 1.6.0
+# 🔍 OCR Guide — MacroFlow 1.7.0
 
-MacroFlow 1.6.0 ships a **high-accuracy OCR engine** that reads text directly from your screen. No cloud, no API key — native Windows + Tesseract.
+MacroFlow 1.7.0 ships a **high-accuracy OCR engine** that reads text directly from your screen. No cloud, no API key — native Windows + Tesseract.
 
 ### How it works (under the hood)
 1. **Screenshot** → saved to `%TEMP%\macroflow_ocr.png` via `System.Drawing.Bitmap` (same as `Screenshot` node)

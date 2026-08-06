@@ -7,7 +7,7 @@
 
 **MacroFlow** is a lightweight, tray-based visual automation workspace for Windows. Design flows as nodes, inspect execution activity, test global shortcuts, and stop an in-progress run with a global emergency shortcut.
 
-> **Project status:** MacroFlow v1.6.0 includes **8 new pro nodes (OCR Screen high-accuracy Tesseract/WinRT, File Watcher, At Time cron, Find Image, For Each, JSON Parse, Lock PC, Volume)**, **Cyclic Loop/Repeat**, **Designer Quick Wins (Undo/Redo, Zoom/Pan/Minimap, Multi-select, Snap Grid, Auto-layout, Validation, Command Palette, Collapsible palette)** and **7 example flows included by default** to learn by example.
+> **Project status:** MacroFlow v1.7.0 includes **8 new pro nodes (OCR Screen high-accuracy Tesseract/WinRT, File Watcher, At Time cron, Find Image, For Each, JSON Parse, Lock PC, Volume)**, **Cyclic Loop/Repeat**, **Designer Quick Wins (Undo/Redo, Zoom/Pan/Minimap, Multi-select, Snap Grid, Auto-layout, Validation, Command Palette, Collapsible palette)** and **7 example flows included by default** to learn by example.
 
 ## Why MacroFlow?
 

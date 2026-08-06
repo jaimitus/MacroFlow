@@ -215,7 +215,7 @@ export default function Settings({ themePref, onThemeChange, settings, onSetting
             onClick={async ()=>{
               setChecking(true); setUpdateStatus('Checking…');
               const res = await checkUpdate();
-              setUpdateStatus(res || '✓ You are on latest (1.6.0)');
+              setUpdateStatus(res || '✓ You are on latest (1.7.0)');
               setChecking(false);
             }}
             disabled={checking}
@@ -272,7 +272,7 @@ export default function Settings({ themePref, onThemeChange, settings, onSetting
             <Icon name="nodes" size={20} />
           </div>
           <div>
-            <div className="text-[13px] font-bold text-ink">MacroFlow <span className="text-ink-3 font-normal">v1.6.0</span></div>
+            <div className="text-[13px] font-bold text-ink">MacroFlow <span className="text-ink-3 font-normal">v1.7.0</span></div>
             <div className="text-[11.5px] text-ink-2">Visual automation launcher for Windows 10 &amp; 11</div>
           </div>
           <div className="ml-auto flex gap-2">

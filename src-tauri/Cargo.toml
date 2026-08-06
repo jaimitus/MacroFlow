@@ -1,6 +1,6 @@
 [package]
 name = "macroflow"
-version = "1.6.0"
+version = "1.7.0"
 description = "Low-latency Windows automation engine (visual AutoHotkey alternative)"
 authors = ["MacroFlow"]
 edition = "2021"

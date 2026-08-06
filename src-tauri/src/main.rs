@@ -702,11 +702,19 @@ fn get_ai_config(state: tauri::State<AppState>) -> (String, String, String, Stri
 }
 
 #[tauri::command]
-fn set_ai_config(state: tauri::State<AppState>, provider: String, endpoint: String, model: String, vision_model: String) -> Result<(), String> {
-    if let Ok(mut p) = state.ai_provider.lock() { *p = provider; }
-    if let Ok(mut e) = state.ai_endpoint.lock() { *e = endpoint; }
-    if let Ok(mut m) = state.ai_model.lock() { *m = model; }
-    if let Ok(mut v) = state.ai_vision_model.lock() { *v = vision_model; }
+fn set_ai_config(state: tauri::State<AppState>, app: tauri::AppHandle, provider: String, endpoint: String, model: String, vision_model: String) -> Result<(), String> {
+    if let Ok(mut p) = state.ai_provider.lock() { *p = provider.clone(); }
+    if let Ok(mut e) = state.ai_endpoint.lock() { *e = endpoint.clone(); }
+    if let Ok(mut m) = state.ai_model.lock() { *m = model.clone(); }
+    if let Ok(mut v) = state.ai_vision_model.lock() { *v = vision_model.clone(); }
+    // Persist to store
+    if let Ok(store) = app.store("settings.json") {
+        store.set("aiProvider", serde_json::Value::String(provider));
+        store.set("aiEndpoint", serde_json::Value::String(endpoint));
+        store.set("aiModel", serde_json::Value::String(model));
+        store.set("aiVisionModel", serde_json::Value::String(vision_model));
+        let _ = store.save();
+    }
     Ok(())
 }
 
@@ -764,14 +772,13 @@ fn main() {
                 .build(),
         )
         .setup(move |app| {
-            // Try to load persisted kill switch from store
+            // Try to load persisted kill switch and AI config from store
             if let Ok(store) = app.store("settings.json") {
                 if let Some(v) = store.get("killSwitch") {
                     if let Some(s) = v.as_str() {
                         if let Ok(mut ks) = app.state::<AppState>().kill_switch.lock() {
                             *ks = s.to_string();
                         }
-                        // Re-register with stored value
                         let _ = app.global_shortcut().unregister(kill_switch_default.as_str());
                         let s_owned = s.to_string();
                         let _ = app.global_shortcut().on_shortcut(s_owned.as_str(), move |app, _shortcut, event| {
@@ -779,6 +786,26 @@ fn main() {
                                 let _ = app.emit("kill-switch", "global-shortcut");
                             }
                         });
+                    }
+                }
+                if let Some(v) = store.get("aiProvider") {
+                    if let Some(s) = v.as_str() {
+                        if let Ok(mut p) = app.state::<AppState>().ai_provider.lock() { *p = s.to_string(); }
+                    }
+                }
+                if let Some(v) = store.get("aiEndpoint") {
+                    if let Some(s) = v.as_str() {
+                        if let Ok(mut e) = app.state::<AppState>().ai_endpoint.lock() { *e = s.to_string(); }
+                    }
+                }
+                if let Some(v) = store.get("aiModel") {
+                    if let Some(s) = v.as_str() {
+                        if let Ok(mut m) = app.state::<AppState>().ai_model.lock() { *m = s.to_string(); }
+                    }
+                }
+                if let Some(v) = store.get("aiVisionModel") {
+                    if let Some(s) = v.as_str() {
+                        if let Ok(mut m) = app.state::<AppState>().ai_vision_model.lock() { *m = s.to_string(); }
                     }
                 }
             }
