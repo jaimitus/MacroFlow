@@ -574,8 +574,9 @@ export default function App() {
           }
           let nextNodes: string[] = [];
           if (node.kind === 'condition' || node.kind === 'ai_condition') {
-             // ai_condition returns true/false via AI
-             const isTrue = result.trim().toLowerCase().startsWith('true');
+             const lower = result.trim().toLowerCase();
+             let isTrue = lower.includes('true') && !lower.includes('false');
+             if (!lower.includes('true') && !lower.includes('false')) isTrue = lower.trim().length>0;
              const branchId = isTrue ? node.config.then : node.config.else;
              if (branchId) nextNodes.push(branchId);
           } else {

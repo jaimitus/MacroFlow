@@ -587,7 +587,12 @@ try {{
         "ai_condition" => {
             let question = config.get("question").cloned().unwrap_or_default();
             let res = call_ai_hybrid(&question, Some("Answer only with true or false. No explanation."), &state, &config)?;
-            let is_true = res.trim().to_lowercase().starts_with("true");
+            let lower = res.trim().to_lowercase();
+            let is_true = lower.contains("true") && !lower.contains("false");
+            // Fallback: if contains neither, treat non-empty as true for demo
+            if !lower.contains("true") && !lower.contains("false") {
+                is_true = !res.trim().is_empty();
+            }
             if let Ok(mut a) = state.last_ai.lock() { *a = res.clone(); }
             if is_true { Ok("true".to_string()) } else { Ok("false".to_string()) }
         }
