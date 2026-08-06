@@ -9,6 +9,14 @@
     "beforeBuildCommand": "npm run build",
     "beforeDevCommand": "npm run dev"
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmltYWwgc3RyaW5nIHB1YmtleSBmb3IgZGVtbyBvbmx5LCByZXBsYWNlIGluIHByb2R1Y3Rpb24=",
+      "endpoints": [
+        "https://github.com/jaimitus/MacroFlow/releases/latest/download/latest.json"
+      ]
+    }
+  },
   "app": {
     "withGlobalTauri": false,
     "windows": [

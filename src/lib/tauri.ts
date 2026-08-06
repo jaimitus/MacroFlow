@@ -202,3 +202,52 @@ export async function openUrl(url: string): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('open_url', { url });
 }
+
+export async function storeSecret(service: string, key: string, value: string): Promise<void> {
+  if (!isTauri()) {
+    try { localStorage.setItem(`vault:${service}:${key}`, btoa(value)); } catch {}
+    return;
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('store_secret', { service, key, value });
+}
+
+export async function getSecret(service: string, key: string): Promise<string | null> {
+  if (!isTauri()) {
+    try { const v = localStorage.getItem(`vault:${service}:${key}`); return v ? atob(v) : null; } catch { return null; }
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  try { return await invoke<string>('get_secret', { service, key }); } catch { return null; }
+}
+
+export async function deleteSecret(service: string, key: string): Promise<void> {
+  if (!isTauri()) {
+    try { localStorage.removeItem(`vault:${service}:${key}`); } catch {}
+    return;
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('delete_secret', { service, key });
+}
+
+export async function getKillSwitch(): Promise<string> {
+  if (!isTauri()) {
+    try { return localStorage.getItem('macroflow.killSwitch') || 'Ctrl+Shift+X'; } catch { return 'Ctrl+Shift+X'; }
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  try { return await invoke<string>('get_kill_switch'); } catch { return 'Ctrl+Shift+X'; }
+}
+
+export async function setKillSwitch(shortcut: string): Promise<string> {
+  if (!isTauri()) {
+    try { localStorage.setItem('macroflow.killSwitch', shortcut); } catch {}
+    return shortcut;
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  return await invoke<string>('set_kill_switch', { shortcut });
+}
+
+export async function checkUpdate(): Promise<string | null> {
+  if (!isTauri()) return null;
+  const { invoke } = await import('@tauri-apps/api/core');
+  try { return await invoke<string | null>('check_update'); } catch { return null; }
+}

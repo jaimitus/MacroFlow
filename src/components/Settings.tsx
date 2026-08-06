@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import Icon from './Icon';
-import { openUrl } from '../lib/tauri';
+import { openUrl, getKillSwitch, setKillSwitch, storeSecret, getSecret, deleteSecret, checkUpdate } from '../lib/tauri';
 import type { ThemePref } from '../hooks/useTheme';
 import type { Settings } from '../types';
 
@@ -23,6 +24,21 @@ const THEMES: Array<{ id: ThemePref; label: string; icon: string; hint: string }
 export default function Settings({ themePref, onThemeChange, settings, onSettingsChange, onRestoreExamples, onResetExamples, flowsCount, examplesCount }: SettingsProps) {
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     onSettingsChange({ ...settings, [key]: value });
+  const [ksInput, setKsInput] = useState(settings.killSwitch);
+  const [ksStatus, setKsStatus] = useState<string | null>(null);
+  const [vaultService, setVaultService] = useState('macroflow');
+  const [vaultKey, setVaultKey] = useState('');
+  const [vaultValue, setVaultValue] = useState('');
+  const [vaultStatus, setVaultStatus] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => { setKsInput(settings.killSwitch); }, [settings.killSwitch]);
+  useEffect(() => {
+    // Load native kill switch on mount (if Tauri, prefer native value)
+    getKillSwitch().then(v => { if (v && v !== settings.killSwitch) setKsInput(v); }).catch(()=>{});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="p-4 md:p-6 space-y-4 rise-in max-w-[840px]">
@@ -83,16 +99,79 @@ export default function Settings({ themePref, onThemeChange, settings, onSetting
         />
       </Section>
 
-      {/* Safety */}
+      {/* Safety - Kill Switch configurable */}
       <Section icon="shield" title="Safety" desc="Emergency stop for running automations">
-        <div className="flex items-center justify-between gap-4 py-2">
-          <div className="min-w-0">
-            <div className="text-[12.5px] font-semibold text-ink">Emergency kill switch</div>
-            <div className="text-[11px] text-ink-2 mt-0.5">Global shortcut that instantly aborts every running macro</div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-4 py-1">
+            <div className="min-w-0">
+              <div className="text-[12.5px] font-semibold text-ink">Emergency kill switch</div>
+              <div className="text-[11px] text-ink-2 mt-0.5">Global shortcut — works even when window is not focused. Requires native enigo + arboard.</div>
+            </div>
+            <kbd className="text-[11.5px] font-mono font-bold bg-danger/10 text-danger border border-danger/25 px-2.5 py-1.5 rounded-lg shrink-0">
+              {settings.killSwitch}
+            </kbd>
           </div>
-          <kbd className="text-[11.5px] font-mono font-bold bg-danger/10 text-danger border border-danger/25 px-2.5 py-1.5 rounded-lg shrink-0">
-            {settings.killSwitch}
-          </kbd>
+          <div className="flex gap-2 items-center">
+            <input value={ksInput} onChange={e=> setKsInput(e.target.value)} placeholder="Ctrl+Shift+X" className="flex-1 text-[12px] border border-line rounded-lg px-2.5 py-1.5 bg-surface text-ink font-mono focus:outline-none focus:border-brand" />
+            <button
+              onClick={async ()=>{
+                try {
+                  const res = await setKillSwitch(ksInput);
+                  onSettingsChange({ ...settings, killSwitch: res });
+                  setKsStatus(`✓ Registered ${res}`);
+                  setTimeout(()=> setKsStatus(null), 2500);
+                } catch (e:any) {
+                  setKsStatus(`✗ ${e.message||e}`);
+                }
+              }}
+              className="shrink-0 bg-brand hover:bg-brand-strong text-brand-fg text-[12px] font-semibold px-3 py-1.5 rounded-lg"
+            >Save</button>
+          </div>
+          {ksStatus && <div className="text-[11px] bg-elevated border border-line rounded-lg px-2.5 py-1.5 font-mono text-ink-2">{ksStatus}</div>}
+          <div className="text-[11px] text-ink-3 bg-elevated border border-line rounded-lg px-3 py-2">
+            Native: <code className="font-mono bg-surface border border-line px-1 rounded">enigo</code> for instant keys, <code className="font-mono bg-surface border border-line px-1 rounded">arboard</code> for clipboard, <code className="font-mono bg-surface border border-line px-1 rounded">screenshots</code> crate for 3× faster captures. No more <code className="font-mono">WScript.Shell</code>.
+          </div>
+        </div>
+      </Section>
+
+      {/* Vault - encrypted secrets */}
+      <Section icon="shield" title="Vault" desc="Encrypted secrets for HTTP / PowerShell — never stored in plain .macroflow">
+        <div className="space-y-3">
+          <div className="text-[11px] text-ink-2">
+            Store API keys as <code className="font-mono bg-elevated border border-line px-1 rounded">{'{{vault:my_key}}'}</code> in any node config. At runtime it’s replaced from OS keychain (<code className="font-mono">keyring</code>).
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <input value={vaultService} onChange={e=> setVaultService(e.target.value)} placeholder="service" className="text-[12px] border border-line rounded-lg px-2.5 py-1.5 bg-surface text-ink focus:outline-none focus:border-brand" />
+            <input value={vaultKey} onChange={e=> setVaultKey(e.target.value)} placeholder="key (e.g. openai_api)" className="text-[12px] border border-line rounded-lg px-2.5 py-1.5 bg-surface text-ink focus:outline-none focus:border-brand" />
+            <input value={vaultValue} onChange={e=> setVaultValue(e.target.value)} placeholder="value" type="password" className="text-[12px] border border-line rounded-lg px-2.5 py-1.5 bg-surface text-ink focus:outline-none focus:border-brand" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={async ()=>{ if(!vaultKey) return; await storeSecret(vaultService, vaultKey, vaultValue); setVaultStatus(`✓ Stored ${vaultService}:${vaultKey}`); setVaultValue(''); }} className="flex-1 bg-brand hover:bg-brand-strong text-brand-fg text-[12px] font-semibold py-1.5 rounded-lg">Store</button>
+            <button onClick={async ()=>{ if(!vaultKey) return; const v = await getSecret(vaultService, vaultKey); setVaultStatus(v ? `● ${vaultKey} = ${v.slice(0,20)}${v.length>20?'…':''}` : 'Not found'); }} className="flex-1 bg-surface border border-line hover:bg-elevated text-ink text-[12px] font-semibold py-1.5 rounded-lg">Get</button>
+            <button onClick={async ()=>{ if(!vaultKey) return; await deleteSecret(vaultService, vaultKey); setVaultStatus(`✗ Deleted ${vaultKey}`); }} className="flex-1 bg-surface border border-danger/30 hover:bg-danger/5 text-danger text-[12px] font-semibold py-1.5 rounded-lg">Delete</button>
+          </div>
+          {vaultStatus && <div className="text-[11px] font-mono bg-elevated border border-line rounded-lg px-2.5 py-1.5 text-ink-2">{vaultStatus}</div>}
+        </div>
+      </Section>
+
+      {/* Updater */}
+      <Section icon="download" title="Updates" desc="Auto-updater via GitHub Releases">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-[12.5px] font-semibold text-ink">Check for updates</div>
+            <div className="text-[11px] text-ink-2 mt-0.5">Uses <code className="font-mono bg-elevated border border-line px-1 rounded">tauri-plugin-updater</code> → https://github.com/jaimitus/MacroFlow/releases</div>
+            {updateStatus && <div className="text-[11px] font-mono bg-elevated border border-line rounded-lg px-2.5 py-1 mt-2 text-ink-2">{updateStatus}</div>}
+          </div>
+          <button
+            onClick={async ()=>{
+              setChecking(true); setUpdateStatus('Checking…');
+              const res = await checkUpdate();
+              setUpdateStatus(res || '✓ You are on latest (1.6.0)');
+              setChecking(false);
+            }}
+            disabled={checking}
+            className="shrink-0 bg-brand hover:bg-brand-strong disabled:opacity-50 text-brand-fg text-[12px] font-semibold px-3.5 py-2 rounded-lg"
+          >{checking ? 'Checking…' : 'Check now'}</button>
         </div>
       </Section>
 
