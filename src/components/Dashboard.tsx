@@ -26,6 +26,7 @@ export interface DashboardProps {
   onEditFlow: (id: string) => void;
   onImportFlow: (flow: Flow) => void;
   onCreateFlow: () => void;
+  onDeleteFlow: (id: string) => void;
 }
 
 export default function Dashboard(p: DashboardProps) {
@@ -182,6 +183,17 @@ export default function Dashboard(p: DashboardProps) {
                     title="Edit"
                   >
                     <Icon name="sliders" size={15} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to delete "${f.name}"?`)) {
+                        p.onDeleteFlow(f.id);
+                      }
+                    }}
+                    className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-danger hover:bg-danger/10 transition-colors shrink-0"
+                    title="Delete"
+                  >
+                    <Icon name="trash" size={15} />
                   </button>
                   <button
                     onClick={() => p.onToggleFlow(f.id)}
