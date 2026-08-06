@@ -87,6 +87,23 @@ export default function Designer(p: DesignerProps) {
         </span>
         <div className="ml-auto flex gap-2">
           <button
+            onClick={() => {
+              const activeFlow = p.flows.find(f => f.id === p.flowId);
+              if (!activeFlow) return;
+              const blob = new Blob([JSON.stringify(activeFlow, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${activeFlow.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.macroflow`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="flex items-center gap-1.5 bg-surface border border-line hover:bg-brand/10 hover:border-brand/40 text-ink-2 hover:text-brand text-[11px] font-semibold px-3.5 py-1.5 rounded-lg transition-colors"
+            title="Export this flow"
+          >
+            <Icon name="upload" size={11} /> Export
+          </button>
+          <button
             onClick={p.onRun}
             disabled={p.isExecuting}
             className="flex items-center gap-1.5 bg-brand hover:bg-brand-strong disabled:opacity-45 text-brand-fg text-[11px] font-semibold px-3.5 py-1.5 rounded-lg transition-colors"

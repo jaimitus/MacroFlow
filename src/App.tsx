@@ -119,6 +119,7 @@ export default function App() {
   const [flows, setFlows] = useState<Flow[]>(() => readStoredFlows());
   const [flowId, setFlowId] = useState('flow-1');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [executingFlowId, setExecutingFlowId] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings>(() => readStoredSettings());
 
   useEffect(() => {
@@ -352,6 +353,7 @@ export default function App() {
     abortRef.current = ctl;
     if (mountedRef.current) {
       setIsExecuting(true);
+      setExecutingFlowId(targetFlow.id);
       setCurrentExecNode(null);
       appendLog('info', `[engine] ▶ running "${targetFlow.name}" · ${targetFlow.nodes.length} nodes`);
     }
@@ -416,6 +418,7 @@ export default function App() {
       if (mountedRef.current) {
         setCurrentExecNode(null);
         setIsExecuting(false);
+        setExecutingFlowId(null);
       }
     }
   }, [flow, flows, appendLog, recordLatency]);
@@ -558,7 +561,7 @@ export default function App() {
                     flows={flows}
                     hookEvents={hookEvents}
                     logs={logs}
-                    nodes={flow.nodes}
+                    nodes={isExecuting && executingFlowId ? (flows.find(f => f.id === executingFlowId)?.nodes || []) : (flow?.nodes || [])}
                     isExecuting={isExecuting}
                     currentExecNode={currentExecNode}
                     cpuHistory={cpuHistory}
