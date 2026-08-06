@@ -54,82 +54,13 @@ MacroFlow's execution engine interacts deeply with the Windows OS. While the Rea
 └── BUILD.md                     # Windows packaging notes
 ```
 
-## Requirements
+## Installation
 
-### Browser UI
+1. Go to the [Releases](https://github.com/jaimitus/MacroFlow/releases) page on GitHub.
+2. Download the latest `MacroFlow_*_x64-setup.exe` (or `.msi`) installer.
+3. Run the setup.
 
-- Node.js **20.19+** or **22.12+**
-- npm 10+
-
-### Native Windows app
-
-- Windows 10 or Windows 11
-- Rust stable with the `x86_64-pc-windows-msvc` toolchain
-- Microsoft C++ Build Tools with the Windows SDK
-- WebView2 Runtime (included with Windows 11; the configured installer can download it on Windows 10)
-
-See the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for the platform-specific setup.
-
-## Quick start
-
-```bash
-# Clone the repository
-git clone https://github.com/jaimitus/MacroFlow.git
-cd MacroFlow
-
-# Install the exact locked dependency tree
-npm ci
-
-# Start the browser UI
-npm run dev
-```
-
-Open the URL printed by Vite. The browser preview is intentionally safe: it only simulates execution and does not install global native hooks.
-
-## Development commands
-
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start the Vite development server |
-| `npm run typecheck` | Run TypeScript strict type checking |
-| `npm run build` | Build the single-file production frontend |
-| `npm run check` | Run type checking and the production build |
-| `npm run tauri -- dev` | Open the native Tauri development window |
-| `npm run tauri -- build` | Build the Windows NSIS/MSI installers |
-| `npm audit` | Audit development and production dependencies |
-
-Before opening a pull request, run:
-
-```bash
-npm ci
-npm run check
-npm audit
-```
-
-## Building the Windows installers
-
-Run this on a Windows development machine with the native prerequisites installed:
-
-```bash
-npm ci
-npm run tauri -- build
-```
-
-Artifacts are written below:
-
-```text
-src-tauri/target/release/bundle/
-├── nsis/MacroFlow_1.4.2_x64-setup.exe
-└── msi/MacroFlow_1.4.2_x64_en-US.msi
-```
-
-The checked-in icons under `src-tauri/icons` were generated from the project mark. If the mark changes, regenerate them with:
-
-```bash
-npm run tauri -- icon public/macroflow.svg -o src-tauri/icons
-```
-
-For more detail, read [BUILD.md](BUILD.md).
+Once installed, MacroFlow runs silently in your Windows System Tray (bottom right of your taskbar). Click the tray icon to open the main interface and start building your macros!
 
 ## Reliability and memory-safety notes
 
