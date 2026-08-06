@@ -1,0 +1,115 @@
+{
+  "id": "flow-ocr-quick",
+  "name": "🔍 OCR Quick Demo — Read Screen in 1 Click",
+  "description": "Perfect for beginners: press Run → OCR captures screen → shows text → saves to Documents\\ocr_quick.txt",
+  "enabled": true,
+  "nodes": [
+    {
+      "id": "t1",
+      "kind": "hotkey",
+      "category": "trigger",
+      "label": "Press to Scan",
+      "x": 40,
+      "y": 100,
+      "config": {
+        "hotkey": "Run"
+      },
+      "color": "#0078D4",
+      "icon": "keyboard"
+    },
+    {
+      "id": "a1_ocr",
+      "kind": "ocr_screen",
+      "category": "action",
+      "label": "OCR Full Screen",
+      "x": 260,
+      "y": 100,
+      "config": {
+        "lang": "eng",
+        "psm": "6",
+        "region": "full"
+      },
+      "color": "#E01765",
+      "icon": "eye"
+    },
+    {
+      "id": "a2_check",
+      "kind": "condition",
+      "category": "action",
+      "label": "Found Text?",
+      "x": 480,
+      "y": 100,
+      "config": {
+        "expr": "len({OCR_TEXT}) > 0",
+        "then": "a3_ok",
+        "else": "a3_empty"
+      },
+      "color": "#D83B01",
+      "icon": "branch"
+    },
+    {
+      "id": "a3_ok",
+      "kind": "notification",
+      "category": "action",
+      "label": "Show Text",
+      "x": 740,
+      "y": 40,
+      "config": {
+        "title": "OCR Success",
+        "body": "{OCR_TEXT}"
+      },
+      "color": "#107C10",
+      "icon": "bell"
+    },
+    {
+      "id": "a4_save",
+      "kind": "file_write",
+      "category": "action",
+      "label": "Save to File",
+      "x": 960,
+      "y": 40,
+      "config": {
+        "path": "{DOCS_PATH}\\ocr_quick.txt",
+        "content": "[{DATE} {TIME}] OCR: {OCR_TEXT}"
+      },
+      "color": "#107C10",
+      "icon": "terminal"
+    },
+    {
+      "id": "a3_empty",
+      "kind": "notification",
+      "category": "action",
+      "label": "No Text",
+      "x": 740,
+      "y": 180,
+      "config": {
+        "title": "OCR Empty",
+        "body": "No text detected — try larger font or spa lang"
+      },
+      "color": "#D13438",
+      "icon": "bell"
+    }
+  ],
+  "edges": [
+    {
+      "from": "t1",
+      "to": "a1_ocr"
+    },
+    {
+      "from": "a1_ocr",
+      "to": "a2_check"
+    },
+    {
+      "from": "a2_check",
+      "to": "a3_ok"
+    },
+    {
+      "from": "a3_ok",
+      "to": "a4_save"
+    },
+    {
+      "from": "a2_check",
+      "to": "a3_empty"
+    }
+  ]
+}
