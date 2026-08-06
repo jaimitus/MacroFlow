@@ -11,7 +11,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmltYWwgc3RyaW5nIHB1YmtleSBmb3IgZGVtbyBvbmx5LCByZXBsYWNlIGluIHByb2R1Y3Rpb24=",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNDNUNBNTMxMjhGNTI1RQpSV1JlVW84U1U4ckZBL0REQlUrTTZ0clRIQURJVGxHeDhPNUYxVE94blduMkYzUVVKQ3JBOGVGeQo=",
       "endpoints": [
         "https://github.com/jaimitus/MacroFlow/releases/latest/download/latest.json"
       ]

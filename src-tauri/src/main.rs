@@ -6,10 +6,11 @@ use tauri::{
     Emitter, Manager,
 };
 use tauri_plugin_global_shortcut::{Builder as ShortcutBuilder, GlobalShortcutExt, ShortcutState};
+use tauri_plugin_store::StoreExt;
 use std::sync::Mutex;
 use sysinfo::System;
 use std::os::windows::process::CommandExt;
-use enigo::{Enigo, Key, Keyboard, Settings as EnigoSettings, Button, Direction, Coordinate};
+use enigo::{Enigo, Key, KeyboardControllable, MouseButton, MouseControllable};
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -27,22 +28,22 @@ fn send_keys_str(enigo: &mut Enigo, keys: &str) {
     for c in keys.chars() {
         if c == '{' {
             if !current_literal.is_empty() {
-                let _ = enigo.text(&current_literal);
+                enigo.key_sequence(&current_literal);
                 current_literal.clear();
             }
             in_bracket = true;
         } else if c == '}' && in_bracket {
             match bracket_content.as_str() {
-                "ENTER" => { let _ = enigo.key(Key::Return, Direction::Click); std::thread::sleep(std::time::Duration::from_millis(20)); },
-                "TAB" => { let _ = enigo.key(Key::Tab, Direction::Click); std::thread::sleep(std::time::Duration::from_millis(20)); },
-                "SPACE" => { let _ = enigo.key(Key::Space, Direction::Click); },
-                "BACKSPACE" => { let _ = enigo.key(Key::Backspace, Direction::Click); },
-                "ESC" => { let _ = enigo.key(Key::Escape, Direction::Click); },
-                "UP" => { let _ = enigo.key(Key::UpArrow, Direction::Click); },
-                "DOWN" => { let _ = enigo.key(Key::DownArrow, Direction::Click); },
-                "LEFT" => { let _ = enigo.key(Key::LeftArrow, Direction::Click); },
-                "RIGHT" => { let _ = enigo.key(Key::RightArrow, Direction::Click); },
-                _ => { let _ = enigo.text(&format!("{{{}}}", bracket_content)); },
+                "ENTER" => { enigo.key_click(Key::Return); std::thread::sleep(std::time::Duration::from_millis(20)); },
+                "TAB" => { enigo.key_click(Key::Tab); std::thread::sleep(std::time::Duration::from_millis(20)); },
+                "SPACE" => { enigo.key_click(Key::Space); },
+                "BACKSPACE" => { enigo.key_click(Key::Backspace); },
+                "ESC" => { enigo.key_click(Key::Escape); },
+                "UP" => { enigo.key_click(Key::UpArrow); },
+                "DOWN" => { enigo.key_click(Key::DownArrow); },
+                "LEFT" => { enigo.key_click(Key::LeftArrow); },
+                "RIGHT" => { enigo.key_click(Key::RightArrow); },
+                _ => { enigo.key_sequence(&format!("{{{}}}", bracket_content)); },
             }
             bracket_content.clear();
             in_bracket = false;
@@ -50,7 +51,7 @@ fn send_keys_str(enigo: &mut Enigo, keys: &str) {
             if in_bracket { bracket_content.push(c); } else { current_literal.push(c); }
         }
     }
-    if !current_literal.is_empty() { let _ = enigo.text(&current_literal); }
+    if !current_literal.is_empty() { enigo.key_sequence(&current_literal); }
 }
 
 fn resolve_variables(text: &str, is_send_keys: bool, state: &tauri::State<AppState>) -> String {
@@ -146,14 +147,12 @@ fn execute_node(state: tauri::State<AppState>, kind: String, mut config: std::co
         }
         "send_keys" => {
             let keys = config.get("keys").cloned().unwrap_or_default();
-            // Native enigo — instant, no COM, no window focus race
-            let mut enigo = Enigo::new(&EnigoSettings::default()).map_err(|e| format!("enigo init: {}", e))?;
+            let mut enigo = Enigo::new();
             send_keys_str(&mut enigo, &keys);
             Ok("Keys sent via enigo".to_string())
         }
         "clipboard_set" => {
             let value = config.get("value").cloned().unwrap_or_default();
-            // Native arboard, fallback to powershell
             match arboard::Clipboard::new().and_then(|mut c| c.set_text(value.clone())) {
                 Ok(_) => Ok("Clipboard updated via arboard".to_string()),
                 Err(_) => {
@@ -189,42 +188,27 @@ fn execute_node(state: tauri::State<AppState>, kind: String, mut config: std::co
         "mouse_move" => {
             let x: i32 = config.get("x").and_then(|s| s.parse().ok()).unwrap_or(0);
             let y: i32 = config.get("y").and_then(|s| s.parse().ok()).unwrap_or(0);
-            // Native enigo
-            match Enigo::new(&EnigoSettings::default()) {
-                Ok(mut enigo) => {
-                    enigo.move_mouse(x, y, Coordinate::Abs).map_err(|e| e.to_string())?;
-                    Ok(format!("Mouse moved to {}, {} via enigo", x, y))
-                },
-                Err(_) => {
-                    let script = format!("Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point({}, {})", x, y);
-                    let _ = std::process::Command::new("powershell").args(&["-WindowStyle", "Hidden", "-Command", &script]).status();
-                    Ok(format!("Mouse moved to {}, {} (fallback)", x, y))
-                }
-            }
+            let mut enigo = Enigo::new();
+            enigo.mouse_move_to(x, y);
+            Ok(format!("Mouse moved to {}, {} via enigo", x, y))
         }
         "mouse_click" => {
             let button = config.get("button").cloned().unwrap_or_else(|| "left".to_string());
-            // Move first if x,y present via enigo
+            let mut enigo = Enigo::new();
             if let (Some(x_str), Some(y_str)) = (config.get("x"), config.get("y")) {
                 if let (Ok(x), Ok(y)) = (x_str.parse::<i32>(), y_str.parse::<i32>()) {
-                    if let Ok(mut enigo) = Enigo::new(&EnigoSettings::default()) {
-                        let _ = enigo.move_mouse(x, y, Coordinate::Abs);
-                    }
+                    enigo.mouse_move_to(x, y);
                 }
             }
-            match Enigo::new(&EnigoSettings::default()) {
-                Ok(mut enigo) => {
-                    let btn = if button.to_lowercase()=="right" { Button::Right } else if button.to_lowercase()=="middle" { Button::Middle } else { Button::Left };
-                    enigo.button(btn, Direction::Click).map_err(|e| e.to_string())?;
-                    Ok("Mouse clicked via enigo".to_string())
-                },
-                Err(_) => {
-                    let btn_code = if button.to_lowercase() == "right" { 1 } else { 0 };
-                    let script = format!("$Code = @'\nusing System.Runtime.InteropServices;\npublic class Mouse {{[DllImport(\"user32.dll\")]public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);public static void Click(int button) {{if (button == 0) {{ mouse_event(0x02, 0, 0, 0, 0); mouse_event(0x04, 0, 0, 0, 0); }} else {{ mouse_event(0x08, 0, 0, 0, 0); mouse_event(0x10, 0, 0, 0, 0); }}}}}\n'@\nAdd-Type -TypeDefinition $Code; [Mouse]::Click({})", btn_code);
-                    let _ = std::process::Command::new("powershell").args(&["-WindowStyle", "Hidden", "-Command", &script]).status();
-                    Ok("Mouse clicked (fallback)".to_string())
-                }
-            }
+            let btn = if button.to_lowercase() == "right" {
+                MouseButton::Right
+            } else if button.to_lowercase() == "middle" {
+                MouseButton::Middle
+            } else {
+                MouseButton::Left
+            };
+            enigo.mouse_click(btn);
+            Ok("Mouse clicked via enigo".to_string())
         }
         "take_screenshot" => {
             let filename = config.get("filename").cloned().unwrap_or_else(|| "screenshot.png".to_string());
@@ -570,7 +554,7 @@ fn main() {
         })
         .plugin(
             ShortcutBuilder::new()
-                .with_shortcut(&kill_switch_default)
+                .with_shortcut(kill_switch_default.as_str())
                 .expect("register kill-switch shortcut")
                 .with_handler(|app, _shortcut, event| {
                     if event.state == ShortcutState::Pressed {
@@ -579,7 +563,7 @@ fn main() {
                 })
                 .build(),
         )
-        .setup(|app| {
+        .setup(move |app| {
             // Try to load persisted kill switch from store
             if let Ok(store) = app.store("settings.json") {
                 if let Some(v) = store.get("killSwitch") {
