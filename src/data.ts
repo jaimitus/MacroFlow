@@ -33,14 +33,14 @@ export const VARIABLES = [
 export const DEFAULT_FLOWS: Flow[] = [
   {
     id: 'flow-1',
-    name: 'Notepad Automation',
-    description: 'Launch Notepad, wait for it to open, and type a native message',
+    name: 'Web Search Automation',
+    description: 'Opens a browser, waits to load, and performs a search automatically',
     enabled: true,
     nodes: [
       { id: 't1', kind: 'hotkey', category: 'trigger', label: 'Trigger', x: 40, y: 150, config: { hotkey: 'Run' }, color: '#0078D4', icon: 'keyboard' },
-      { id: 'a1', kind: 'open_app', category: 'action', label: 'Launch Notepad', x: 260, y: 150, config: { exe: 'notepad.exe' }, color: '#8764B8', icon: 'send' },
-      { id: 'a2', kind: 'delay', category: 'action', label: 'Wait 1 sec', x: 480, y: 150, config: { ms: '1000' }, color: '#5C6370', icon: 'timer' },
-      { id: 'a3', kind: 'send_keys', category: 'action', label: 'Type message', x: 700, y: 150, config: { keys: 'hi mate lol{ENTER}' }, color: '#4A5568', icon: 'type' },
+      { id: 'a1', kind: 'open_url', category: 'action', label: 'Open Google', x: 260, y: 150, config: { url: 'https://google.com' }, color: '#8764B8', icon: 'send' },
+      { id: 'a2', kind: 'delay', category: 'action', label: 'Wait for load', x: 480, y: 150, config: { ms: '2000' }, color: '#5C6370', icon: 'timer' },
+      { id: 'a3', kind: 'send_keys', category: 'action', label: 'Search query', x: 700, y: 150, config: { keys: 'MacroFlow automation tool{ENTER}' }, color: '#4A5568', icon: 'type' },
     ],
     edges: [
       { from: 't1', to: 'a1' },
@@ -57,10 +57,10 @@ export const DEFAULT_FLOWS: Flow[] = [
       { id: 't1', kind: 'hotkey', category: 'trigger', label: 'Trigger', x: 40, y: 150, config: { hotkey: 'Run' }, color: '#0078D4', icon: 'keyboard' },
       { id: 'a1', kind: 'clipboard_set', category: 'action', label: 'Set Clipboard', x: 260, y: 150, config: { value: '777' }, color: '#8764B8', icon: 'clipboard' },
       { id: 'a2', kind: 'condition', category: 'action', label: 'Clipboard has text?', x: 480, y: 150, config: { expr: 'len({CLIPBOARD}) > 0', then: 'a3', else: 'a5' }, color: '#D83B01', icon: 'branch' },
-      { id: 'a3', kind: 'open_app', category: 'action', label: 'Open Calc (THEN)', x: 740, y: 40, config: { exe: 'calc.exe' }, color: '#8764B8', icon: 'send' },
-      { id: 'a3_delay', kind: 'delay', category: 'action', label: 'Wait for Calc', x: 960, y: 40, config: { ms: '1000' }, color: '#5C6370', icon: 'timer' },
-      { id: 'a3_focus', kind: 'focus_window', category: 'action', label: 'Focus Calc', x: 1180, y: 40, config: { title: 'Calculator' }, color: '#8764B8', icon: 'eye' },
-      { id: 'a4', kind: 'send_keys', category: 'action', label: 'Type math', x: 1400, y: 40, config: { keys: '500*2={ENTER}' }, color: '#4A5568', icon: 'type' },
+      { id: 'a3', kind: 'open_app', category: 'action', label: 'Open CMD (THEN)', x: 740, y: 40, config: { exe: 'cmd.exe' }, color: '#8764B8', icon: 'send' },
+      { id: 'a3_delay', kind: 'delay', category: 'action', label: 'Wait for CMD', x: 960, y: 40, config: { ms: '1000' }, color: '#5C6370', icon: 'timer' },
+      { id: 'a3_focus', kind: 'focus_window', category: 'action', label: 'Focus CMD', x: 1180, y: 40, config: { title: 'cmd.exe' }, color: '#8764B8', icon: 'eye' },
+      { id: 'a4', kind: 'send_keys', category: 'action', label: 'Type command', x: 1400, y: 40, config: { keys: 'color 0A{ENTER}echo HELLO FROM MACROFLOW!{ENTER}' }, color: '#4A5568', icon: 'type' },
       { id: 'a5', kind: 'notification', category: 'action', label: 'Notify (ELSE)', x: 740, y: 220, config: { title: 'Empty', body: 'Clipboard was empty' }, color: '#107C10', icon: 'bell' },
     ],
     edges: [
