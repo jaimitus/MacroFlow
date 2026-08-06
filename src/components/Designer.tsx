@@ -1,4 +1,4 @@
-import { useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import Icon from './Icon';
 import { PALETTE, VARIABLES } from '../data';
 import type { Flow, FlowEdge, FlowNode, NodeKind } from '../types';
@@ -25,9 +25,22 @@ const NODE_W = 168;
 
 export default function Designer(p: DesignerProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [connectFrom, setConnectFrom] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<FlowEdge | null>(null);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY !== 0) {
+        el.scrollLeft += e.deltaY;
+      }
+    };
+    el.addEventListener('wheel', handleWheel, { passive: true });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
 
   const selected = p.nodes.find((n) => n.id === p.selectedNodeId) ?? null;
 
@@ -124,7 +137,7 @@ export default function Designer(p: DesignerProps) {
         </div>
 
         {/* Canvas Scroll Container */}
-        <div className="flex-1 min-w-0 h-full relative overflow-auto custom-scrollbar bg-canvas select-none">
+        <div ref={scrollContainerRef} className="flex-1 min-w-0 h-full relative overflow-auto custom-scrollbar bg-canvas select-none">
           <div
             ref={canvasRef}
             onMouseMove={handleCanvasMove}
@@ -138,7 +151,8 @@ export default function Designer(p: DesignerProps) {
             }}
             style={{
               width: `${Math.max(2800, ...p.nodes.map((n) => n.x + 400))}px`,
-              height: `${Math.max(1200, ...p.nodes.map((n) => n.y + 300))}px`,
+              height: '100%',
+              minHeight: '100%',
             }}
             className="relative dot-grid"
           >
