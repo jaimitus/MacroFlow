@@ -5,7 +5,12 @@ import Designer from './components/Designer';
 import Settings from './components/Settings';
 import { useSafeTimers } from './hooks/useSafeTimers';
 import { useTheme } from './hooks/useTheme';
-import { bindTauriEvents } from './lib/tauri';
+import {
+  bindTauriEvents,
+  closeWindow,
+  minimizeWindow,
+  toggleMaximizeWindow,
+} from './lib/tauri';
 import { DEFAULT_FLOWS, PALETTE } from './data';
 import type { Flow, HookEvent, LogEntry, LogLevel, NodeKind, Settings as AppSettings, TabId } from './types';
 
@@ -27,13 +32,45 @@ const DEFAULT_SETTINGS: AppSettings = {
   killSwitch: 'Ctrl + Shift + Esc',
 };
 
+const SETTINGS_STORAGE_KEY = 'macroflow.settings';
+
+function readStoredSettings(): AppSettings {
+  if (typeof localStorage === 'undefined') return DEFAULT_SETTINGS;
+  try {
+    const stored = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) ?? 'null') as Partial<AppSettings> | null;
+    if (!stored || typeof stored !== 'object') return DEFAULT_SETTINGS;
+    return {
+      startWithWindows: typeof stored.startWithWindows === 'boolean' ? stored.startWithWindows : DEFAULT_SETTINGS.startWithWindows,
+      minimizeToTray: typeof stored.minimizeToTray === 'boolean' ? stored.minimizeToTray : DEFAULT_SETTINGS.minimizeToTray,
+      startMinimized: typeof stored.startMinimized === 'boolean' ? stored.startMinimized : DEFAULT_SETTINGS.startMinimized,
+      notificationsEnabled: typeof stored.notificationsEnabled === 'boolean' ? stored.notificationsEnabled : DEFAULT_SETTINGS.notificationsEnabled,
+      killSwitch: typeof stored.killSwitch === 'string' ? stored.killSwitch : DEFAULT_SETTINGS.killSwitch,
+    };
+  } catch {
+    // A malformed or unavailable browser storage must not prevent the app from
+    // starting with safe defaults.
+    return DEFAULT_SETTINGS;
+  }
+}
+
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
-    const t = window.setTimeout(resolve, ms);
-    signal.addEventListener('abort', () => {
-      window.clearTimeout(t);
+    if (signal.aborted) {
       resolve();
-    }, { once: true });
+      return;
+    }
+
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      signal.removeEventListener('abort', finish);
+      resolve();
+    };
+
+    const timeoutId = window.setTimeout(finish, ms);
+    signal.addEventListener('abort', finish, { once: true });
   });
 
 function topologicalOrder(nodes: Flow['nodes'], edges: Flow['edges']): string[] {
@@ -45,8 +82,9 @@ function topologicalOrder(nodes: Flow['nodes'], edges: Flow['edges']): string[] 
   const seen = new Set<string>();
   const order: string[] = [];
   const q = nodes.filter((n) => n.category === 'trigger').map((n) => n.id);
-  while (q.length) {
-    const cur = q.shift()!;
+  let cursor = 0;
+  while (cursor < q.length) {
+    const cur = q[cursor++];
     if (seen.has(cur)) continue;
     seen.add(cur);
     order.push(cur);
@@ -66,15 +104,23 @@ export default function App() {
   const [flows, setFlows] = useState<Flow[]>(DEFAULT_FLOWS);
   const [flowId, setFlowId] = useState('flow-1');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<AppSettings>(() => readStoredSettings());
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch {
+      // Storage is optional (for example in a locked-down WebView).
+    }
+  }, [settings]);
 
   const [hookEvents, setHookEvents] = useState<HookEvent[]>([
     { id: 1, key: 'Ctrl+Alt+R', code: 'KeyR', modifiers: ['Ctrl', 'Alt'], timestamp: '14:32:01.115', latency: '1.1 ms', handled: true },
   ]);
   const [logs, setLogs] = useState<LogEntry[]>([
-    { id: logSeq++, time: now(), level: 'ok', msg: '[engine] resident started · 3 automations loaded' },
-    { id: logSeq++, time: now(), level: 'info', msg: '[hooks] global keyboard + mouse hooks installed' },
-    { id: logSeq++, time: now(), level: 'info', msg: '[tray] running in background · 0% CPU idle' },
+    { id: logSeq++, time: now(), level: 'ok', msg: '[engine] workspace ready · 3 automations loaded' },
+    { id: logSeq++, time: now(), level: 'info', msg: '[hooks] keyboard trigger monitor ready · native bridge optional' },
+    { id: logSeq++, time: now(), level: 'info', msg: '[tray] desktop shell idle · waiting for events' },
   ]);
 
   const [isExecuting, setIsExecuting] = useState(false);
@@ -86,8 +132,24 @@ export default function App() {
   const [latencyHistory, setLatencyHistory] = useState<number[]>([0.8, 1.1, 0.7, 1.0, 0.9, 1.2, 0.8]);
 
   const abortRef = useRef<AbortController | null>(null);
+  const executingRef = useRef(false);
+  const mountedRef = useRef(true);
   const runFlowRef = useRef<() => void>(() => {});
+  const killSwitchRef = useRef<(source: string) => void>(() => {});
   const eventSeq = useRef(1);
+
+  // Abort any in-flight execution when the app is torn down. This also makes
+  // the async runner safe during React StrictMode remounts and native window
+  // disposal: no continuation can retain the component indefinitely.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      executingRef.current = false;
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
 
   const flow = flows.find((f) => f.id === flowId) ?? flows[0];
 
@@ -101,31 +163,30 @@ export default function App() {
 
   const triggerKillSwitch = useCallback(
     (source: string) => {
-      if (!isExecuting) {
-        setKillFlash(true);
-        timers.setTimeout(() => setKillFlash(false), 900);
+      setKillFlash(true);
+      timers.setTimeout(() => setKillFlash(false), 900);
+
+      if (!executingRef.current) {
         appendLog('warn', `[stop] ${source} · nothing running`);
         return;
       }
+
       appendLog('err', `[stop] emergency abort from ${source}`);
       abortRef.current?.abort();
-      setKillFlash(true);
-      timers.setTimeout(() => {
-        setIsExecuting(false);
-        setCurrentExecNode(null);
-        setKillFlash(false);
-        appendLog('warn', '[engine] execution aborted safely · handles released');
-      }, 550);
     },
-    [isExecuting, appendLog, timers]
+    [appendLog, timers]
   );
+
+  useEffect(() => {
+    killSwitchRef.current = triggerKillSwitch;
+  }, [triggerKillSwitch]);
 
   // Global kill switch + hook simulation
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.code === 'Escape') {
         e.preventDefault();
-        triggerKillSwitch('Ctrl+Shift+Esc');
+        killSwitchRef.current('Ctrl+Shift+Esc');
         return;
       }
       if (e.ctrlKey && e.altKey && e.key.length === 1) {
@@ -149,19 +210,27 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [triggerKillSwitch, recordLatency]);
+  }, [recordLatency]);
 
-  // Native bridge (Tauri global shortcut + tray) — no-ops in the browser
+  // Native bridge (Tauri global shortcut + tray) — no-ops in the browser.
+  // Refs keep this subscription stable while still calling the latest
+  // callbacks; rebinding it on every execution state change is unnecessary and
+  // can race with the asynchronous `listen()` registration.
   useEffect(() => {
+    let disposed = false;
     let dispose = () => {};
     bindTauriEvents({
-      onKillSwitch: (src) => triggerKillSwitch(`native:${src}`),
+      onKillSwitch: (src) => killSwitchRef.current(`native:${src}`),
       onRunFlow: () => runFlowRef.current(),
     }).then((d) => {
-      dispose = d;
+      if (disposed) d();
+      else dispose = d;
     });
-    return () => dispose();
-  }, [triggerKillSwitch]);
+    return () => {
+      disposed = true;
+      dispose();
+    };
+  }, []);
 
   // Resource heartbeat (UI viz only)
   useEffect(() => {
@@ -185,7 +254,12 @@ export default function App() {
     (kind: NodeKind) => {
       const tpl = PALETTE.find((x) => x.kind === kind);
       if (!tpl) return;
-      const id = 'n' + Date.now().toString(36).slice(-4);
+      const currentFlow = flows.find((candidate) => candidate.id === flowId);
+      if (!currentFlow) return;
+      let id = `n-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      while (currentFlow.nodes.some((node) => node.id === id)) {
+        id = `n-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      }
       const defaults: Record<string, string> =
         kind === 'delay'
           ? { ms: '500' }
@@ -217,35 +291,62 @@ export default function App() {
       setSelectedNodeId(id);
       appendLog('info', `[designer] added ${tpl.label}`);
     },
-    [flowId, selectedNodeId, appendLog]
+    [flowId, selectedNodeId, flows, appendLog]
   );
 
   const runFlow = useCallback(async () => {
-    if (isExecuting) return;
+    // State updates are asynchronous, so `isExecuting` alone cannot prevent
+    // two same-tick clicks/native events from starting two runners. The ref is
+    // the synchronous execution lock; the state remains the render signal.
+    if (executingRef.current) return;
+
     const ctl = new AbortController();
+    executingRef.current = true;
     abortRef.current = ctl;
-    setIsExecuting(true);
-    setCurrentExecNode(null);
-    appendLog('info', `[engine] ▶ running "${flow.name}" · ${flow.nodes.length} nodes`);
-    const order = topologicalOrder(flow.nodes, flow.edges);
-    for (const id of order) {
-      if (ctl.signal.aborted) break;
-      const node = flow.nodes.find((n) => n.id === id);
-      if (!node) continue;
-      setCurrentExecNode(id);
-      appendLog('inject', `[run] → ${node.label}`);
-      const dur = node.kind === 'powershell' ? 460 : node.kind === 'delay' ? 650 : 170 + Math.random() * 120;
-      await sleep(dur, ctl.signal);
-      if (ctl.signal.aborted) break;
-      appendLog('ok', `[done] ${node.label}`);
-      recordLatency(0.5 + Math.random() * 1.1);
-    }
-    if (!ctl.signal.aborted) {
+    if (mountedRef.current) {
+      setIsExecuting(true);
       setCurrentExecNode(null);
-      setIsExecuting(false);
-      appendLog('ok', '[engine] ✔ flow finished');
+      appendLog('info', `[engine] ▶ running "${flow.name}" · ${flow.nodes.length} nodes`);
     }
-  }, [isExecuting, flow, appendLog, recordLatency]);
+
+    try {
+      const order = topologicalOrder(flow.nodes, flow.edges);
+      for (const id of order) {
+        if (ctl.signal.aborted) break;
+        const node = flow.nodes.find((n) => n.id === id);
+        if (!node) continue;
+        if (mountedRef.current) {
+          setCurrentExecNode(id);
+          appendLog('inject', `[run] → ${node.label}`);
+        }
+        const dur = node.kind === 'powershell' ? 460 : node.kind === 'delay' ? 650 : 170 + Math.random() * 120;
+        await sleep(dur, ctl.signal);
+        if (ctl.signal.aborted) break;
+        if (mountedRef.current) {
+          appendLog('ok', `[done] ${node.label}`);
+          recordLatency(0.5 + Math.random() * 1.1);
+        }
+      }
+
+      if (mountedRef.current) {
+        appendLog(
+          ctl.signal.aborted ? 'warn' : 'ok',
+          ctl.signal.aborted
+            ? '[engine] execution aborted safely · handles released'
+            : '[engine] ✔ flow finished'
+        );
+      }
+    } finally {
+      // Only clear the controller that belongs to this run. This protects the
+      // ref if a future runner is ever started during teardown/race handling.
+      if (abortRef.current === ctl) abortRef.current = null;
+      executingRef.current = false;
+      if (mountedRef.current) {
+        setCurrentExecNode(null);
+        setIsExecuting(false);
+      }
+    }
+  }, [flow, appendLog, recordLatency]);
 
   useEffect(() => {
     runFlowRef.current = runFlow;
@@ -282,9 +383,30 @@ export default function App() {
               <span className="text-[11px] font-medium capitalize hidden sm:inline">{pref}</span>
             </button>
             <div className="w-px h-5 bg-line mx-1" />
-            <button className="w-9 h-8 grid place-items-center hover:bg-ink/[0.06] rounded-lg text-ink-2 transition-colors"><Icon name="minus" size={14} /></button>
-            <button className="w-9 h-8 grid place-items-center hover:bg-ink/[0.06] rounded-lg text-ink-2 transition-colors"><Icon name="square" size={12} /></button>
-            <button className="w-9 h-8 grid place-items-center hover:bg-danger hover:text-white rounded-lg text-ink-2 transition-colors"><Icon name="x" size={14} /></button>
+            <button
+              type="button"
+              onClick={() => void minimizeWindow()}
+              aria-label="Minimize window"
+              className="w-9 h-8 grid place-items-center hover:bg-ink/[0.06] rounded-lg text-ink-2 transition-colors"
+            >
+              <Icon name="minus" size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => void toggleMaximizeWindow()}
+              aria-label="Maximize window"
+              className="w-9 h-8 grid place-items-center hover:bg-ink/[0.06] rounded-lg text-ink-2 transition-colors"
+            >
+              <Icon name="square" size={12} />
+            </button>
+            <button
+              type="button"
+              onClick={() => void closeWindow(settings.minimizeToTray)}
+              aria-label={settings.minimizeToTray ? 'Hide to system tray' : 'Close window'}
+              className="w-9 h-8 grid place-items-center hover:bg-danger hover:text-white rounded-lg text-ink-2 transition-colors"
+            >
+              <Icon name="x" size={14} />
+            </button>
           </div>
         </div>
 

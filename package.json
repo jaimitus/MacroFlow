@@ -1,12 +1,15 @@
 {
-  "name": "react-vite-tailwind",
+  "name": "macroflow",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.4.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run build",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
@@ -25,7 +28,18 @@
     "@vitejs/plugin-react": "5.1.1",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
-    "vite": "7.3.2",
+    "vite": "^7.3.6",
     "vite-plugin-singlefile": "2.3.0"
-  }
+  },
+  "description": "Lightweight visual automation launcher for Windows",
+  "author": "MacroFlow contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jaimitus/MacroFlow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jaimitus/MacroFlow/issues"
+  },
+  "homepage": "https://github.com/jaimitus/MacroFlow"
 }

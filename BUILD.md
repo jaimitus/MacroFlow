@@ -1,80 +1,81 @@
-# MacroFlow — Building the Windows `.exe`
+# Building MacroFlow for Windows
 
-MacroFlow ships as a native Windows app via **Tauri**. Tauri reuses the system
-**WebView2** runtime (built into Windows 11, and installable on Windows 10), so
-the installer and RAM footprint stay tiny — no bundled Chromium like Electron.
+MacroFlow ships as a native Windows desktop app through **Tauri 2**. Tauri uses the installed **WebView2** runtime rather than bundling a second Chromium runtime, which keeps the installer smaller than an equivalent Electron app.
 
-| Metric        | MacroFlow (Tauri) | Electron equivalent |
-| ------------- | ----------------- | ------------------- |
-| Installer     | ~8 MB             | ~145 MB             |
-| Resident RAM  | ~55 MB            | ~180 MB             |
-| Supported OS  | Windows 10 & 11   | —                   |
+> The current repository contains the Tauri shell, tray integration, global kill-switch bridge, and a safe UI execution simulator. Native mouse/keyboard/window/PowerShell action execution is not enabled yet.
 
-## Prerequisites (one time)
+## Prerequisites
 
-1. **Rust** (stable): https://rustup.rs
-2. **Node.js** 18+
-3. **Microsoft C++ Build Tools** (MSVC) — from the Visual Studio Installer
-4. **WebView2 runtime** — preinstalled on Windows 11; on Windows 10 the
-   installer fetches it automatically (`downloadBootstrapper`, silent)
+Install the following on a Windows 10/11 machine:
 
-## Build steps
+1. [Node.js 20.19+](https://nodejs.org/) or Node.js 22.12+
+2. [Rust stable](https://rustup.rs/), using the MSVC toolchain
+3. [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the Windows SDK
+4. [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) — already included with current Windows 11 installations
 
-```bash
-# 1. Install dependencies
-npm install
+Tauri's complete prerequisite list is available in the [official documentation](https://v2.tauri.app/start/prerequisites/).
 
-# 2. Generate the app icons from a single 1024x1024 PNG
-npx tauri icon ./app-icon.png
+## Development
 
-# 3. Develop with a live native window + tray
-npx tauri dev
+```powershell
+# From the repository root
+npm ci
 
-# 4. Produce the release installers (.exe + .msi)
-npx tauri build
+# Browser-only UI preview; native actions remain simulated
+npm run dev
+
+# Native Tauri window with tray and global shortcut
+npm run tauri -- dev
 ```
 
-The installers are written to:
+The Vite development server is configured by Tauri to use `http://localhost:5173` locally. Do not expose this development server to an untrusted network.
 
+## Production build
+
+```powershell
+npm ci
+npm run check
+npm run tauri -- build
 ```
+
+`npm run check` runs strict TypeScript checking and the Vite production build. The native installers are created at:
+
+```text
 src-tauri/target/release/bundle/
-├── nsis/MacroFlow_1.4.2_x64-setup.exe   ← main installer (per-user, no admin)
+├── nsis/MacroFlow_1.4.2_x64-setup.exe
 └── msi/MacroFlow_1.4.2_x64_en-US.msi
 ```
 
-## Why it's small, fast and leak-free
+The NSIS installer is configured for a per-user installation. Its WebView2 bootstrapper can download the runtime on machines where it is missing.
 
-**Binary/memory tuning** — `src-tauri/Cargo.toml`:
+## Application icons
 
-```toml
-[profile.release]
-opt-level = "s"     # optimize for size
-lto = true          # cross-crate dead-code elimination
-codegen-units = 1   # best optimization
-panic = "abort"     # no unwind tables → smaller, less RAM
-strip = true        # strip symbols
+The source mark is `public/macroflow.svg`. The checked-in Windows/Tauri icon set lives in `src-tauri/icons`. Regenerate it after changing the mark:
+
+```powershell
+npm run tauri -- icon public/macroflow.svg -o src-tauri/icons
 ```
 
-**Frontend leak safety** — every timer and listener is tracked and released on
-unmount via `src/hooks/useSafeTimers.ts`:
+## Release checklist
 
-- Intervals cleared on unmount (no orphan timers holding closures)
-- Timeouts cancelled (no `setState` after unmount)
-- `keydown` and native Tauri event subscriptions removed in effect disposers
-- Log buffer capped at 60 entries, hook events at 6 → memory never grows
+- [ ] `npm ci` completes from a clean checkout.
+- [ ] `npm run check` passes.
+- [ ] `npm audit` reports no vulnerabilities.
+- [ ] `npm run tauri -- build` succeeds on Windows.
+- [ ] Launch the generated installer on a clean Windows VM.
+- [ ] Confirm the tray menu can show the window, run the active flow, trigger the kill switch, and exit.
+- [ ] Confirm `Ctrl + Shift + Esc` works while the window is unfocused.
+- [ ] Run and abort flows repeatedly; inspect Task Manager for stable working set and handle count.
+- [ ] Verify uninstall removes the application cleanly.
 
-**Native cleanup (Rust)** — `HookManager::Drop` calls `UnhookWindowsHookEx`
-(RAII), and PowerShell children run with `kill_on_drop(true)`.
+## Memory and lifecycle design
 
-## Publishing to GitHub
+The frontend uses explicit lifecycle ownership:
 
-- Tag a release (e.g. `v1.4.2`) and attach the generated `-setup.exe`.
-- A GitHub Actions workflow using `tauri-apps/tauri-action` can build the
-  installer on `windows-latest` and upload it automatically on every tag.
+- `useSafeTimers` tracks every interval and timeout and clears them during unmount.
+- The execution delay removes its abort listener when it resolves, preventing retained timer closures.
+- The native event bridge handles the race where an async Tauri listener finishes after React has already cleaned up the effect.
+- The runner uses one `AbortController` at a time, clears its ref in `finally`, and aborts during teardown.
+- UI histories and activity buffers are capped rather than appended indefinitely.
 
-## Verify low memory / no leaks
-
-1. **Task Manager** — the working set should stay flat during a 1-hour idle soak
-   (the engine is event-driven, no polling).
-2. **Application Verifier / DrMemory** on the release `.exe` — 0 handle/GDI
-   leaks across 10k hook install/unhook cycles.
+For native action work, each process, OS hook, and event subscription must follow the same ownership rule: acquire once, release on cancellation and in the owning type's destructor/drop path, and add a bounded soak test before release.

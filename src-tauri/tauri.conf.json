@@ -28,7 +28,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:"
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
     },
     "trayIcon": {
       "id": "main",
@@ -59,8 +59,8 @@
     "resources": [],
     "copyright": "© 2026 MacroFlow",
     "category": "Productivity",
-    "shortDescription": "Low-latency visual automation engine for Windows",
-    "longDescription": "A resident, tray-based automation launcher (visual AutoHotkey alternative). Global hooks, a visual node graph, and a global kill switch — with a tiny memory footprint via the system WebView2."
+    "shortDescription": "Lightweight visual automation launcher for Windows",
+    "longDescription": "A resident, tray-based visual automation workspace with a node designer, global kill-switch bridge, and a small WebView2-based desktop shell."
   },
   "plugins": {
     "global-shortcut": {}
