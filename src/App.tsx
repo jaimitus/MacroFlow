@@ -64,9 +64,8 @@ function readStoredFlows(): Flow[] {
     const stored = JSON.parse(localStorage.getItem(FLOWS_STORAGE_KEY) ?? 'null') as Flow[] | null;
     if (!stored || !Array.isArray(stored) || stored.length === 0) return DEFAULT_FLOWS;
     
-    // Migration: If they have old flows without Focus Browser in flow-1, reset it so they get the working web demo and new nodes.
-    const f1 = stored.find(f => f.id === 'flow-1');
-    if (!f1 || !f1.nodes.some(n => n.id === 'a2_focus')) return DEFAULT_FLOWS;
+    // Migration: If they don't have the new flow-matrix demo, reset flows to show the Matrix Patrol demo!
+    if (!stored.some(f => f.id === 'flow-matrix')) return DEFAULT_FLOWS;
 
     return stored;
   } catch {
@@ -100,7 +99,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [flows, setFlows] = useState<Flow[]>(() => readStoredFlows());
-  const [flowId, setFlowId] = useState('flow-1');
+  const [flowId, setFlowId] = useState('flow-matrix');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [executingFlowId, setExecutingFlowId] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings>(() => readStoredSettings());
@@ -345,15 +344,42 @@ export default function App() {
       const triggers = targetFlow.nodes.filter((n) => n.category === 'trigger').map((n) => n.id);
       const q = triggers.length > 0 ? [...triggers] : targetFlow.nodes.length > 0 ? [targetFlow.nodes[0].id] : [];
       const seen = new Set<string>();
+      const repeatCounts = new Map<string, number>();
 
       while (q.length > 0) {
         if (ctl.signal.aborted) break;
         const id = q.shift()!;
-        if (seen.has(id)) continue;
-        seen.add(id);
 
         const node = targetFlow.nodes.find((n) => n.id === id);
         if (!node) continue;
+
+        if (node.kind === 'repeat') {
+          const maxLoops = parseInt(node.config.count || '3', 10);
+          const currentLoop = (repeatCounts.get(id) || 0) + 1;
+          repeatCounts.set(id, currentLoop);
+
+          if (currentLoop > maxLoops) {
+            seen.add(id);
+            continue;
+          }
+
+          // Unmark target loop nodes so they can execute again
+          const loopTargetId = node.config.target || targetFlow.edges.find((e) => e.from === id)?.to;
+          if (loopTargetId) {
+            const resetStack = [loopTargetId];
+            const visited = new Set<string>();
+            while (resetStack.length > 0) {
+              const cur = resetStack.pop()!;
+              if (visited.has(cur) || cur === id) continue;
+              visited.add(cur);
+              seen.delete(cur);
+              targetFlow.edges.filter((e) => e.from === cur).forEach((e) => resetStack.push(e.to));
+            }
+          }
+        } else {
+          if (seen.has(id)) continue;
+          seen.add(id);
+        }
 
         if (mountedRef.current) {
           setCurrentExecNode(id);

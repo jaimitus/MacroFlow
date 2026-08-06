@@ -302,6 +302,10 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
                 .spawn();
             Ok(format!("Searched '{}' via {}", query, engine))
         }
+        "repeat" => {
+            let count = config.get("count").cloned().unwrap_or_else(|| "3".to_string());
+            Ok(format!("Loop step ({})", count))
+        }
         _ => Ok("Simulated (Not fully implemented yet)".into())
     }
 }

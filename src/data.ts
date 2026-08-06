@@ -23,6 +23,7 @@ export const PALETTE: PaletteItem[] = [
   { kind: 'file_write', label: 'Write File', cat: 'action', icon: 'terminal', color: '#107C10', desc: 'save text' },
   { kind: 'play_sound', label: 'Play Sound', cat: 'action', icon: 'bell', color: '#E01765', desc: 'beep alert' },
   { kind: 'web_search', label: 'Web Search', cat: 'action', icon: 'search', color: '#0078D4', desc: 'instant search' },
+  { kind: 'repeat', label: 'Loop / Repeat', cat: 'action', icon: 'refresh', color: '#D83B01', desc: 'repeat N times' },
 ];
 
 export const VARIABLES = [
@@ -35,6 +36,40 @@ export const VARIABLES = [
 ];
 
 export const DEFAULT_FLOWS: Flow[] = [
+  {
+    id: 'flow-matrix',
+    name: '⚡ Matrix Cyber Audit & System Patrol (Loop Demo)',
+    description: 'Launches Matrix CMD, runs a 3-step ping loop with sound alerts, captures screenshot & logs report',
+    enabled: true,
+    nodes: [
+      { id: 't1', kind: 'hotkey', category: 'trigger', label: 'Start Patrol', x: 40, y: 150, config: { hotkey: 'Run' }, color: '#0078D4', icon: 'keyboard' },
+      { id: 'a1_notify', kind: 'notification', category: 'action', label: 'Notify Start', x: 240, y: 150, config: { title: 'Cyber Patrol', body: 'Starting Matrix System Audit...' }, color: '#107C10', icon: 'bell' },
+      { id: 'a2_cmd', kind: 'open_app', category: 'action', label: 'Launch CMD', x: 440, y: 150, config: { exe: 'cmd.exe' }, color: '#8764B8', icon: 'send' },
+      { id: 'a3_delay', kind: 'delay', category: 'action', label: 'Wait CMD', x: 640, y: 150, config: { ms: '1200' }, color: '#5C6370', icon: 'timer' },
+      { id: 'a4_focus', kind: 'focus_window', category: 'action', label: 'Focus CMD', x: 840, y: 150, config: { title: 'cmd.exe' }, color: '#8764B8', icon: 'eye' },
+      { id: 'a5_init', kind: 'send_keys', category: 'action', label: 'Init Matrix Theme', x: 1040, y: 150, config: { keys: 'color 0A{ENTER}title MATRIX CYBER PATROL{ENTER}cls{ENTER}' }, color: '#4A5568', icon: 'type' },
+      { id: 'a6_loop', kind: 'repeat', category: 'action', label: 'Loop Patrol (3x)', x: 1240, y: 150, config: { count: '3' }, color: '#D83B01', icon: 'branch' },
+      { id: 'a7_ping', kind: 'send_keys', category: 'action', label: 'Ping & Audit', x: 1440, y: 150, config: { keys: 'echo [PATROL {TIME}] Auditing Node...{ENTER}ping -n 2 127.0.0.1 > nul{ENTER}' }, color: '#4A5568', icon: 'type' },
+      { id: 'a8_sound', kind: 'play_sound', category: 'action', label: 'Sound Alert', x: 1640, y: 150, config: {}, color: '#E01765', icon: 'bell' },
+      { id: 'a9_shot', kind: 'take_screenshot', category: 'action', label: 'Capture Screen', x: 1840, y: 150, config: { filename: 'matrix_audit.png' }, color: '#E01765', icon: 'camera' },
+      { id: 'a10_log', kind: 'file_write', category: 'action', label: 'Log Report', x: 2040, y: 150, config: { path: '{DOCS_PATH}\\matrix_patrol.log', content: 'Patrol Completed at {DATE} {TIME} by user {USER}' }, color: '#107C10', icon: 'terminal' },
+      { id: 'a11_done', kind: 'notification', category: 'action', label: 'Notify Finish', x: 2240, y: 150, config: { title: 'Audit Complete', body: 'Report and screenshot saved to Documents!' }, color: '#107C10', icon: 'bell' },
+    ],
+    edges: [
+      { from: 't1', to: 'a1_notify' },
+      { from: 'a1_notify', to: 'a2_cmd' },
+      { from: 'a2_cmd', to: 'a3_delay' },
+      { from: 'a3_delay', to: 'a4_focus' },
+      { from: 'a4_focus', to: 'a5_init' },
+      { from: 'a5_init', to: 'a6_loop' },
+      { from: 'a6_loop', to: 'a7_ping' },
+      { from: 'a7_ping', to: 'a8_sound' },
+      { from: 'a8_sound', to: 'a6_loop' },
+      { from: 'a6_loop', to: 'a9_shot' },
+      { from: 'a9_shot', to: 'a10_log' },
+      { from: 'a10_log', to: 'a11_done' },
+    ],
+  },
   {
     id: 'flow-1',
     name: 'Web Search Automation',
@@ -77,21 +112,6 @@ export const DEFAULT_FLOWS: Flow[] = [
       { from: 'a3_delay', to: 'a3_focus' },
       { from: 'a3_focus', to: 'a4' },
       { from: 'a2', to: 'a5' },
-    ],
-  },
-  {
-    id: 'flow-3',
-    name: 'Daily Report (Background)',
-    description: 'Exports clipboard to Documents silently and notifies',
-    enabled: false,
-    nodes: [
-      { id: 't1', kind: 'hotkey', category: 'trigger', label: 'Trigger', x: 40, y: 150, config: { hotkey: 'Run' }, color: '#0078D4', icon: 'keyboard' },
-      { id: 'a2', kind: 'powershell', category: 'action', label: 'Export via script', x: 300, y: 150, config: { script: 'Get-Clipboard | Out-File "$env:USERPROFILE\\Documents\\macro_report.txt"', timeout_ms: '5000' }, color: '#0F6CBD', icon: 'terminal' },
-      { id: 'a4', kind: 'notification', category: 'action', label: 'Notify success', x: 560, y: 150, config: { title: 'Report saved', body: 'Written to Documents!' }, color: '#107C10', icon: 'bell' },
-    ],
-    edges: [
-      { from: 't1', to: 'a2' },
-      { from: 'a2', to: 'a4' },
     ],
   },
 ];

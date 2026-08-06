@@ -19,7 +19,8 @@ export type ActionKind =
   | 'http_request'
   | 'file_write'
   | 'play_sound'
-  | 'web_search';
+  | 'web_search'
+  | 'repeat';
 export type NodeKind = TriggerKind | ActionKind;
 
 export interface FlowNode {
