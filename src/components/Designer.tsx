@@ -66,13 +66,12 @@ export default function Designer(p: DesignerProps) {
   const [flowRenaming, setFlowRenaming] = useState(false);
   const [renameName, setRenameName] = useState('');
   const [renameDesc, setRenameDesc] = useState('');
-  const [scrollPos, setScrollPos] = useState({ left: 0, top: 0 });
+  const [scrollPos, setScrollPos] = useState({ left: 0, top: 0, w: 0, h: 0 });
   const [showHelp, setShowHelp] = useState(false);
 
   const selected = p.nodes.find((n) => n.id === p.selectedNodeId) ?? null;
   const currentFlow = p.flows.find(f=>f.id===p.flowId) ?? p.flows[0];
 
-  // Sync recents when added externally via App
   useEffect(()=>{
     const update = () => {
       try { setRecentKinds(JSON.parse(localStorage.getItem('macroflow.recent')||'[]')); } catch {}
@@ -92,32 +91,39 @@ export default function Designer(p: DesignerProps) {
     });
   };
 
-  // Zoom with Ctrl+Wheel
+  // Wheel: Ctrl+Wheel = zoom, normal vertical wheel = horizontal scroll (original behavior)
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        const delta = -e.deltaY * 0.001;
-        setZoom(z => Math.min(1.8, Math.max(0.4, +(z + delta).toFixed(2))));
+        const delta = -e.deltaY * 0.0015;
+        setZoom(z => Math.min(1.8, Math.max(0.4, +((z + delta)).toFixed(2))));
+      } else if (e.deltaY !== 0 && Math.abs(e.deltaX) < 2) {
+        // emulate original: vertical wheel scrolls horizontally for wide canvas
+        // only do if shift not pressed? Keep both: if user scrolls vertically, also nudge horizontally
+        // Don't preventDefault so vertical scroll still works
+        el.scrollLeft += e.deltaY;
       }
     };
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // Minimap viewport sync
+  // Minimap viewport sync - track scroll
   useEffect(()=>{
     const el = scrollContainerRef.current;
     if (!el) return;
-    const onScroll = () => setScrollPos({ left: el.scrollLeft, top: el.scrollTop });
+    const onScroll = () => setScrollPos({ left: el.scrollLeft, top: el.scrollTop, w: el.clientWidth, h: el.clientHeight });
     el.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(onScroll);
+    ro.observe(el);
     onScroll();
-    return ()=> el.removeEventListener('scroll', onScroll);
+    return ()=> { el.removeEventListener('scroll', onScroll); ro.disconnect(); };
   }, [zoom]);
 
-  // Keyboard: Ctrl+K, Delete, Ctrl+D, ?, Esc
+  // Keyboard
   useEffect(()=>{
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -154,7 +160,6 @@ export default function Designer(p: DesignerProps) {
   }, [p, showHelp, selectedEdge]);
 
   const handleCanvasMove = (e: ReactMouseEvent<HTMLDivElement>) => {
-    // panning
     if (isPanning && scrollContainerRef.current) {
       const dx = e.clientX - panStart.current.x;
       const dy = e.clientY - panStart.current.y;
@@ -162,7 +167,6 @@ export default function Designer(p: DesignerProps) {
       scrollContainerRef.current.scrollTop = panStart.current.scrollTop - dy;
       return;
     }
-    // box selection
     if (isBoxSelecting && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
       const curX = (e.clientX - rect.left) / zoom;
@@ -174,17 +178,14 @@ export default function Designer(p: DesignerProps) {
       setSelectionBox({x,y,w,h});
       return;
     }
-    // dragging nodes
     if (!dragId || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     const mouseX = (e.clientX - rect.left) / zoom;
     const mouseY = (e.clientY - rect.top) / zoom;
-    // base offset for primary dragged node
     const startPos = dragStartPositions.current.get(dragId);
     if (!startPos) return;
     const rawX = mouseX - (dragOffsets.current.get(dragId)?.dx || 0);
     const rawY = mouseY - (dragOffsets.current.get(dragId)?.dy || 0);
-    // For single drag
     if (p.selectedIds.length <=1 || !p.selectedIds.includes(dragId)) {
       let nx = rawX;
       let ny = rawY;
@@ -197,7 +198,6 @@ export default function Designer(p: DesignerProps) {
         )
       );
     } else {
-      // multi-drag: maintain relative offsets
       const deltaX = rawX - startPos.x;
       const deltaY = rawY - startPos.y;
       p.onNodesChange(
@@ -251,6 +251,9 @@ export default function Designer(p: DesignerProps) {
 
   const canvasWidth = Math.max(2800, ...p.nodes.map((n) => n.x + 400));
   const canvasHeight = Math.max(750, ...p.nodes.map((n) => n.y + 250));
+  // total scaled size for scroll container
+  const scaledW = canvasWidth * zoom;
+  const scaledH = canvasHeight * zoom;
 
   const handleFitView = () => {
     if (p.nodes.length === 0) return;
@@ -365,7 +368,7 @@ export default function Designer(p: DesignerProps) {
         </div>
       </div>
 
-      <div className="flex flex-1 min-h-[460px] min-w-0 overflow-hidden">
+      <div className="flex flex-1 min-h-[460px] min-w-0 overflow-hidden relative">
         {/* Palette */}
         <div className="w-[188px] bg-elevated border-r border-line flex flex-col hidden md:flex shrink-0">
           <div className="p-2 border-b border-line space-y-2">
@@ -414,333 +417,316 @@ export default function Designer(p: DesignerProps) {
           <div className="p-2 border-t border-line text-[10px] text-ink-3 text-center">Ctrl+K · arrastrar · Shift+click</div>
         </div>
 
-        {/* Canvas Scroll Container */}
-        <div ref={scrollContainerRef} className="flex-1 min-w-0 h-full relative overflow-auto custom-scrollbar bg-canvas select-none">
-          <div
-            ref={canvasRef}
-            onMouseMove={handleCanvasMove}
-            onMouseUp={() => {
-              if (dragId) p.onDragStateChange?.(false);
-              setDragId(null);
-              dragOffsets.current.clear();
-              dragStartPositions.current.clear();
-              if (isBoxSelecting && selectionBox) {
-                const sel = p.nodes.filter(n=>{
-                  const nx = n.x, ny = n.y;
-                  return nx < selectionBox.x + selectionBox.w && nx + NODE_W > selectionBox.x && ny < selectionBox.y + selectionBox.h && ny + NODE_H > selectionBox.y;
-                }).map(n=>n.id);
-                p.onSelectIds(sel);
-                if (sel.length===1) p.onSelectNode(sel[0]);
-                else if (sel.length===0) { p.onSelectNode(null); }
-                else p.onSelectNode(sel[0]);
-              }
-              setIsBoxSelecting(false);
-              setSelectionBox(null);
-              setIsPanning(false);
-            }}
-            onMouseLeave={() => { if (dragId) p.onDragStateChange?.(false); setDragId(null); setIsPanning(false); setIsBoxSelecting(false); setSelectionBox(null); }}
-            onMouseDown={(e)=>{
-              // middle mouse or left on background starts pan or box select
-              if (e.button===1) { // middle
-                e.preventDefault();
-                setIsPanning(true);
-                panStart.current = { x: e.clientX, y: e.clientY, scrollLeft: scrollContainerRef.current?.scrollLeft||0, scrollTop: scrollContainerRef.current?.scrollTop||0 };
-                return;
-              }
-              if (e.target === e.currentTarget) {
-                // check if shift? Actually box selection or pan?
-                // If not pressing space, do box selection
-                const rect = canvasRef.current?.getBoundingClientRect();
-                if (!rect) return;
-                const x = (e.clientX - rect.left)/zoom;
-                const y = (e.clientY - rect.top)/zoom;
-                if (e.shiftKey || !isPanning) {
-                  // start box selection
-                  setIsBoxSelecting(true);
-                  boxStart.current = {x,y};
-                  setSelectionBox({x,y,w:0,h:0});
-                  p.onSelectNode(null);
-                  // keep existing selection if shift? We'll handle on mouseup
-                  if (!e.shiftKey) p.onSelectIds([]);
-                  setSelectedEdge(null);
-                } else {
-                  setIsPanning(true);
-                  panStart.current = { x: e.clientX, y: e.clientY, scrollLeft: scrollContainerRef.current?.scrollLeft||0, scrollTop: scrollContainerRef.current?.scrollTop||0 };
-                }
-              }
-            }}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                // click already handled via mousedown, but ensure deselect
-                if (!isBoxSelecting) {
-                  // p.onSelectNode(null); // handled in mousedown
-                }
-                setSelectedEdge(null);
-              }
-            }}
-            style={{
-              width: `${canvasWidth}px`,
-              height: `${canvasHeight}px`,
-              transform: `scale(${zoom})`,
-              transformOrigin: '0 0',
-            }}
-            className="relative dot-grid h-full"
-          >
-            {/* Grid snap visualization */}
-            {snapEnabled && (
-              <div className="absolute inset-0 pointer-events-none opacity-[0.045]" style={{ backgroundImage: `linear-gradient(to right, var(--color-ink) 1px, transparent 1px), linear-gradient(to bottom, var(--color-ink) 1px, transparent 1px)`, backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px` }} />
-            )}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ width: canvasWidth, height: canvasHeight }}>
-            {p.edges.map((e, i) => {
-              const from = p.nodes.find((n) => n.id === e.from);
-              const to = p.nodes.find((n) => n.id === e.to);
-              if (!from || !to) return null;
-              const isSel = selectedEdge?.from === e.from && selectedEdge?.to === e.to;
-              const isActive = p.currentExecNode === e.to;
-              // Validation for edge: check if it creates cycle? Simple: if from==to or edge points backwards in layout? We'll mark red if target is ancestor via BFS
-              const isCyclic = (()=> {
-                // detect if adding this edge creates cycle: if there's path from to -> from
-                const adj = new Map<string,string[]>();
-                p.nodes.forEach(n=> adj.set(n.id, []));
-                p.edges.forEach(ed=>{
-                  if (ed===e) return; // exclude current edge to test? Actually include to detect cycle including current
-                  adj.get(ed.from)?.push(ed.to);
-                });
-                // BFS from to
-                const stack = [e.to];
-                const visited = new Set<string>();
-                while(stack.length){ const cur=stack.pop()!; if(cur===e.from) return true; if(visited.has(cur)) continue; visited.add(cur); (adj.get(cur)||[]).forEach(n=> stack.push(n)); }
-                return false;
-              })();
-              return (
-                <path
-                  key={i}
-                  d={edgePath(from, to)}
-                  fill="none"
-                  stroke={isCyclic ? 'var(--color-danger)' : isSel || isActive ? 'var(--color-brand)' : 'var(--color-line-strong)'}
-                  strokeWidth={isActive ? 2.4 : isCyclic ? 2 : 1.8}
-                  strokeDasharray={isCyclic ? '6 4' : isActive ? '7 5' : '0'}
-                  opacity={isCyclic ? 0.9 : 1}
-                  className={isActive ? 'edge-running' : ''}
-                />
-              );
-            })}
-            {p.edges.map((e, i) => {
-              const from = p.nodes.find((n) => n.id === e.from);
-              const to = p.nodes.find((n) => n.id === e.to);
-              if (!from || !to) return null;
-              return (
-                <path
-                  key={`hit-${i}`}
-                  d={edgePath(from, to)}
-                  fill="none"
-                  stroke="transparent"
-                  strokeWidth={14}
-                  className="pointer-events-auto cursor-pointer"
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    setSelectedEdge(e);
-                    p.onSelectNode(null);
-                    p.onSelectIds([]);
-                  }}
-                />
-              );
-            })}
-            {/* Selection box */}
-            {selectionBox && (
-              <rect x={selectionBox.x} y={selectionBox.y} width={selectionBox.w} height={selectionBox.h} fill="rgba(0,103,192,0.08)" stroke="var(--color-brand)" strokeWidth={1} strokeDasharray="4 3" />
-            )}
-          </svg>
-
-          {p.nodes.map((n) => {
-            const isRunning = p.currentExecNode === n.id;
-            const isSelectedSingle = p.selectedNodeId === n.id;
-            const isMultiSelected = p.selectedIds.includes(n.id);
-            const isSelected = isSelectedSingle || isMultiSelected;
-            const idx = p.nodes.indexOf(n);
-            const done = p.isExecuting && currentIdx !== -1 && idx < currentIdx;
-            const issues = validateNode(n, p.edges, p.nodes);
-            const hasError = issues.some(x=>x.level==='error');
-            const hasWarn = issues.some(x=>x.level==='warn' && x.msg!=='orphan node') || issues.some(x=>x.msg==='orphan node');
-            const orphan = issues.find(x=>x.msg==='orphan node');
-
-            return (
+        {/* Canvas area with fixed minimap overlay */}
+        <div className="flex-1 min-w-0 h-full relative overflow-hidden flex flex-col bg-canvas">
+          <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto custom-scrollbar bg-canvas select-none relative">
+            {/* Scaled wrapper so scrollbars match zoomed size */}
+            <div style={{ width: scaledW, height: scaledH }} className="relative">
               <div
-                key={n.id}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  const rect = canvasRef.current?.getBoundingClientRect();
-                  if (!rect) return;
-                  const mx = (e.clientX - rect.left)/zoom;
-                  const my = (e.clientY - rect.top)/zoom;
-                  // multi-select logic
-                  if (e.shiftKey) {
-                    const next = p.selectedIds.includes(n.id) ? p.selectedIds.filter(id=> id!==n.id) : [...p.selectedIds, n.id];
-                    p.onSelectIds(next);
-                    if (next.length===1) p.onSelectNode(next[0]);
-                    else if (next.length===0) p.onSelectNode(null);
-                    else p.onSelectNode(n.id);
-                    // also keep drag for move
-                    // prepare drag for all selected
-                  } else {
-                    if (!p.selectedIds.includes(n.id)) {
-                      p.onSelectIds([n.id]);
-                      p.onSelectNode(n.id);
-                    } else if (p.selectedIds.length>1) {
-                      // keep multi selection, but set primary
-                      p.onSelectNode(n.id);
-                    } else {
-                      p.onSelectNode(n.id);
-                    }
+                ref={canvasRef}
+                onMouseMove={handleCanvasMove}
+                onMouseUp={() => {
+                  if (dragId) p.onDragStateChange?.(false);
+                  setDragId(null);
+                  dragOffsets.current.clear();
+                  dragStartPositions.current.clear();
+                  if (isBoxSelecting && selectionBox) {
+                    const sel = p.nodes.filter(n=>{
+                      const nx = n.x, ny = n.y;
+                      return nx < selectionBox.x + selectionBox.w && nx + NODE_W > selectionBox.x && ny < selectionBox.y + selectionBox.h && ny + NODE_H > selectionBox.y;
+                    }).map(n=>n.id);
+                    p.onSelectIds(sel);
+                    if (sel.length===1) p.onSelectNode(sel[0]);
+                    else if (sel.length===0) { p.onSelectNode(null); }
+                    else p.onSelectNode(sel[0]);
                   }
-                  setSelectedEdge(null);
-                  setDragId(n.id);
-                  p.onDragStateChange?.(true);
-                  // remember offsets for all selected + primary
-                  const idsToTrack = (e.shiftKey ? (p.selectedIds.includes(n.id) ? p.selectedIds : [...p.selectedIds, n.id]) : (p.selectedIds.includes(n.id) && p.selectedIds.length>1 ? p.selectedIds : [n.id]));
-                  dragStartPositions.current = new Map();
-                  dragOffsets.current = new Map();
-                  idsToTrack.forEach(id=>{
-                    const node = p.nodes.find(nn=> nn.id===id);
-                    if (node) {
-                      dragStartPositions.current.set(id, {x: node.x, y: node.y});
-                      dragOffsets.current.set(id, {dx: mx - node.x, dy: my - node.y});
+                  setIsBoxSelecting(false);
+                  setSelectionBox(null);
+                  setIsPanning(false);
+                }}
+                onMouseLeave={() => { if (dragId) p.onDragStateChange?.(false); setDragId(null); setIsPanning(false); setIsBoxSelecting(false); setSelectionBox(null); }}
+                onMouseDown={(e)=>{
+                  if (e.button===1) {
+                    e.preventDefault();
+                    setIsPanning(true);
+                    panStart.current = { x: e.clientX, y: e.clientY, scrollLeft: scrollContainerRef.current?.scrollLeft||0, scrollTop: scrollContainerRef.current?.scrollTop||0 };
+                    return;
+                  }
+                  if (e.target === e.currentTarget) {
+                    const rect = canvasRef.current?.getBoundingClientRect();
+                    if (!rect) return;
+                    const x = (e.clientX - rect.left)/zoom;
+                    const y = (e.clientY - rect.top)/zoom;
+                    if (e.shiftKey || !isPanning) {
+                      setIsBoxSelecting(true);
+                      boxStart.current = {x,y};
+                      setSelectionBox({x,y,w:0,h:0});
+                      p.onSelectNode(null);
+                      if (!e.shiftKey) p.onSelectIds([]);
+                      setSelectedEdge(null);
+                    } else {
+                      setIsPanning(true);
+                      panStart.current = { x: e.clientX, y: e.clientY, scrollLeft: scrollContainerRef.current?.scrollLeft||0, scrollTop: scrollContainerRef.current?.scrollTop||0 };
                     }
-                  });
-                  // ensure dragged node also tracked even if not in list yet
-                  if (!dragStartPositions.current.has(n.id)) {
-                    dragStartPositions.current.set(n.id, {x: n.x, y: n.y});
-                    dragOffsets.current.set(n.id, {dx: mx - n.x, dy: my - n.y});
                   }
                 }}
                 onClick={(e) => {
-                  e.stopPropagation();
-                  // click without drag already selected, keep
-                  setSelectedEdge(null);
+                  if (e.target === e.currentTarget) {
+                    setSelectedEdge(null);
+                  }
                 }}
-                className={`absolute rounded-xl border bg-surface shadow-card cursor-grab active:cursor-grabbing transition-shadow ${isSelected ? 'ring-2 ring-brand border-brand/40 z-10' : hasError ? 'border-danger/60 ring-1 ring-danger/30' : hasWarn ? 'border-warn/40' : 'border-line'} ${isRunning ? 'node-running border-brand' : ''} ${isMultiSelected ? 'shadow-pop' : ''}`}
-                style={{ left: n.x, top: n.y, width: NODE_W }}
+                style={{
+                  width: `${canvasWidth}px`,
+                  height: `${canvasHeight}px`,
+                  transform: `scale(${zoom})`,
+                  transformOrigin: '0 0',
+                }}
+                className="absolute inset-0 dot-grid"
               >
-                <div className="h-1.5 w-full rounded-t-xl" style={{ background: hasError? '#d42a37' : hasWarn? '#b7791f' : n.color }} />
-                <div className="p-2.5">
-                  <div className="flex items-start gap-2">
-                    <span className="w-7 h-7 rounded-lg grid place-items-center text-white shrink-0" style={{ background: n.color }}>
-                      <Icon name={n.icon} size={13} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[11px] font-bold text-ink leading-tight truncate flex items-center gap-1">
-                        {n.label}
-                        {hasError && <span title={issues.filter(i=>i.level==='error').map(i=>i.msg).join(', ')} className="w-3.5 h-3.5 rounded-full bg-danger text-white grid place-items-center shrink-0"><Icon name="alert" size={8} /></span>}
-                        {!hasError && hasWarn && <span title={issues.map(i=>i.msg).join(', ')} className="w-3.5 h-3.5 rounded-full bg-warn text-white grid place-items-center shrink-0"><Icon name="alert" size={8} /></span>}
+                {snapEnabled && (
+                  <div className="absolute inset-0 pointer-events-none opacity-[0.045]" style={{ backgroundImage: `linear-gradient(to right, var(--color-ink) 1px, transparent 1px), linear-gradient(to bottom, var(--color-ink) 1px, transparent 1px)`, backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px` }} />
+                )}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ width: canvasWidth, height: canvasHeight }}>
+                {p.edges.map((e, i) => {
+                  const from = p.nodes.find((n) => n.id === e.from);
+                  const to = p.nodes.find((n) => n.id === e.to);
+                  if (!from || !to) return null;
+                  const isSel = selectedEdge?.from === e.from && selectedEdge?.to === e.to;
+                  const isActive = p.currentExecNode === e.to;
+                  const isCyclic = (()=> {
+                    const adj = new Map<string,string[]>();
+                    p.nodes.forEach(n=> adj.set(n.id, []));
+                    p.edges.forEach(ed=>{
+                      if (ed===e) return;
+                      adj.get(ed.from)?.push(ed.to);
+                    });
+                    const stack = [e.to];
+                    const visited = new Set<string>();
+                    while(stack.length){ const cur=stack.pop()!; if(cur===e.from) return true; if(visited.has(cur)) continue; visited.add(cur); (adj.get(cur)||[]).forEach(n=> stack.push(n)); }
+                    return false;
+                  })();
+                  return (
+                    <path
+                      key={i}
+                      d={edgePath(from, to)}
+                      fill="none"
+                      stroke={isCyclic ? 'var(--color-danger)' : isSel || isActive ? 'var(--color-brand)' : 'var(--color-line-strong)'}
+                      strokeWidth={isActive ? 2.4 : isCyclic ? 2 : 1.8}
+                      strokeDasharray={isCyclic ? '6 4' : isActive ? '7 5' : '0'}
+                      opacity={isCyclic ? 0.9 : 1}
+                      className={isActive ? 'edge-running' : ''}
+                    />
+                  );
+                })}
+                {p.edges.map((e, i) => {
+                  const from = p.nodes.find((n) => n.id === e.from);
+                  const to = p.nodes.find((n) => n.id === e.to);
+                  if (!from || !to) return null;
+                  return (
+                    <path
+                      key={`hit-${i}`}
+                      d={edgePath(from, to)}
+                      fill="none"
+                      stroke="transparent"
+                      strokeWidth={14}
+                      className="pointer-events-auto cursor-pointer"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        setSelectedEdge(e);
+                        p.onSelectNode(null);
+                        p.onSelectIds([]);
+                      }}
+                    />
+                  );
+                })}
+                {selectionBox && (
+                  <rect x={selectionBox.x} y={selectionBox.y} width={selectionBox.w} height={selectionBox.h} fill="rgba(0,103,192,0.08)" stroke="var(--color-brand)" strokeWidth={1} strokeDasharray="4 3" />
+                )}
+              </svg>
+
+              {p.nodes.map((n) => {
+                const isRunning = p.currentExecNode === n.id;
+                const isSelectedSingle = p.selectedNodeId === n.id;
+                const isMultiSelected = p.selectedIds.includes(n.id);
+                const isSelected = isSelectedSingle || isMultiSelected;
+                const idx = p.nodes.indexOf(n);
+                const done = p.isExecuting && currentIdx !== -1 && idx < currentIdx;
+                const issues = validateNode(n, p.edges, p.nodes);
+                const hasError = issues.some(x=>x.level==='error');
+                const hasWarn = issues.some(x=>x.level==='warn' && x.msg!=='orphan node') || issues.some(x=>x.msg==='orphan node');
+                const orphan = issues.find(x=>x.msg==='orphan node');
+
+                return (
+                  <div
+                    key={n.id}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      const rect = canvasRef.current?.getBoundingClientRect();
+                      if (!rect) return;
+                      const mx = (e.clientX - rect.left)/zoom;
+                      const my = (e.clientY - rect.top)/zoom;
+                      if (e.shiftKey) {
+                        const next = p.selectedIds.includes(n.id) ? p.selectedIds.filter(id=> id!==n.id) : [...p.selectedIds, n.id];
+                        p.onSelectIds(next);
+                        if (next.length===1) p.onSelectNode(next[0]);
+                        else if (next.length===0) p.onSelectNode(null);
+                        else p.onSelectNode(n.id);
+                      } else {
+                        if (!p.selectedIds.includes(n.id)) {
+                          p.onSelectIds([n.id]);
+                          p.onSelectNode(n.id);
+                        } else if (p.selectedIds.length>1) {
+                          p.onSelectNode(n.id);
+                        } else {
+                          p.onSelectNode(n.id);
+                        }
+                      }
+                      setSelectedEdge(null);
+                      setDragId(n.id);
+                      p.onDragStateChange?.(true);
+                      const idsToTrack = (e.shiftKey ? (p.selectedIds.includes(n.id) ? p.selectedIds : [...p.selectedIds, n.id]) : (p.selectedIds.includes(n.id) && p.selectedIds.length>1 ? p.selectedIds : [n.id]));
+                      dragStartPositions.current = new Map();
+                      dragOffsets.current = new Map();
+                      idsToTrack.forEach(id=>{
+                        const node = p.nodes.find(nn=> nn.id===id);
+                        if (node) {
+                          dragStartPositions.current.set(id, {x: node.x, y: node.y});
+                          dragOffsets.current.set(id, {dx: mx - node.x, dy: my - node.y});
+                        }
+                      });
+                      if (!dragStartPositions.current.has(n.id)) {
+                        dragStartPositions.current.set(n.id, {x: n.x, y: n.y});
+                        dragOffsets.current.set(n.id, {dx: mx - n.x, dy: my - n.y});
+                      }
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedEdge(null);
+                    }}
+                    className={`absolute rounded-xl border bg-surface shadow-card cursor-grab active:cursor-grabbing transition-shadow ${isSelected ? 'ring-2 ring-brand border-brand/40 z-10' : hasError ? 'border-danger/60 ring-1 ring-danger/30' : hasWarn ? 'border-warn/40' : 'border-line'} ${isRunning ? 'node-running border-brand' : ''} ${isMultiSelected ? 'shadow-pop' : ''}`}
+                    style={{ left: n.x, top: n.y, width: NODE_W }}
+                  >
+                    <div className="h-1.5 w-full rounded-t-xl" style={{ background: hasError? '#d42a37' : hasWarn? '#b7791f' : n.color }} />
+                    <div className="p-2.5">
+                      <div className="flex items-start gap-2">
+                        <span className="w-7 h-7 rounded-lg grid place-items-center text-white shrink-0" style={{ background: n.color }}>
+                          <Icon name={n.icon} size={13} />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[11px] font-bold text-ink leading-tight truncate flex items-center gap-1">
+                            {n.label}
+                            {hasError && <span title={issues.filter(i=>i.level==='error').map(i=>i.msg).join(', ')} className="w-3.5 h-3.5 rounded-full bg-danger text-white grid place-items-center shrink-0"><Icon name="alert" size={8} /></span>}
+                            {!hasError && hasWarn && <span title={issues.map(i=>i.msg).join(', ')} className="w-3.5 h-3.5 rounded-full bg-warn text-white grid place-items-center shrink-0"><Icon name="alert" size={8} /></span>}
+                          </div>
+                          <div className="text-[9.5px] text-ink-3 font-mono truncate">{n.kind}</div>
+                        </div>
+                        <span className={`w-2 h-2 rounded-full mt-1 shrink-0 ${n.category === 'trigger' ? 'bg-brand' : 'bg-success'}`} />
                       </div>
-                      <div className="text-[9.5px] text-ink-3 font-mono truncate">{n.kind}</div>
+                      <div className={`mt-2 text-[10px] rounded-md px-2 py-1 font-mono truncate border ${hasError? 'bg-danger/5 border-danger/20 text-danger' : hasWarn? 'bg-warn/5 border-warn/20 text-ink-2' : 'bg-elevated border-line text-ink-2'}`}>
+                        {hasError ? issues.find(i=>i.level==='error')?.msg : orphan ? 'orphan' : Object.values(n.config)[0] || '—'}
+                      </div>
+                      {done && (
+                        <div className="absolute top-2 right-9 w-4 h-4 rounded-full bg-success text-white grid place-items-center">
+                          <Icon name="check" size={9} strokeWidth={3.2} />
+                        </div>
+                      )}
+                      {isMultiSelected && <div className="absolute -top-1 -right-1 w-3 h-3 bg-brand rounded-full border-2 border-surface" />}
                     </div>
-                    <span className={`w-2 h-2 rounded-full mt-1 shrink-0 ${n.category === 'trigger' ? 'bg-brand' : 'bg-success'}`} />
+                    <button
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); handlePortClick(n.id); }}
+                      className={`absolute -right-[7px] top-1/2 -translate-y-1/2 w-[15px] h-[15px] rounded-full border-2 bg-surface transition-colors ${connectFrom === n.id ? 'border-brand bg-brand' : 'border-line-strong hover:border-brand'}`}
+                      title="Output"
+                    />
+                    <button
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); handlePortClick(n.id); }}
+                      className={`absolute -left-[7px] top-1/2 -translate-y-1/2 w-[15px] h-[15px] rounded-full border-2 bg-surface hover:border-brand transition-colors ${connectFrom ? 'border-brand/50' : 'border-line-strong'}`}
+                      title="Input"
+                    />
                   </div>
-                  <div className={`mt-2 text-[10px] rounded-md px-2 py-1 font-mono truncate border ${hasError? 'bg-danger/5 border-danger/20 text-danger' : hasWarn? 'bg-warn/5 border-warn/20 text-ink-2' : 'bg-elevated border-line text-ink-2'}`}>
-                    {hasError ? issues.find(i=>i.level==='error')?.msg : orphan ? 'orphan' : Object.values(n.config)[0] || '—'}
-                  </div>
-                  {done && (
-                    <div className="absolute top-2 right-9 w-4 h-4 rounded-full bg-success text-white grid place-items-center">
-                      <Icon name="check" size={9} strokeWidth={3.2} />
-                    </div>
-                  )}
-                  {isMultiSelected && <div className="absolute -top-1 -right-1 w-3 h-3 bg-brand rounded-full border-2 border-surface" />}
+                );
+              })}
+
+              <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-surface/95 backdrop-blur px-3 py-1.5 rounded-full border border-line text-[11px] shadow-card pointer-events-none">
+                <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                <span className="text-ink-2 hidden sm:inline">Drag nodes · click ports to connect · Shift+click multi</span>
+                <span className="text-ink-2 sm:hidden">Drag · Shift multi</span>
+              </div>
+              {connectFrom && (
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-brand text-brand-fg px-3.5 py-1.5 rounded-full text-[11px] font-semibold shadow-pop flex items-center gap-2">
+                  Connecting from <span className="font-mono bg-white/20 px-1.5 rounded">{connectFrom}</span> — click a target
+                  <button onClick={() => setConnectFrom(null)} className="hover:bg-white/20 rounded-full p-0.5"><Icon name="x" size={12} /></button>
                 </div>
-                <button
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => { e.stopPropagation(); handlePortClick(n.id); }}
-                  className={`absolute -right-[7px] top-1/2 -translate-y-1/2 w-[15px] h-[15px] rounded-full border-2 bg-surface transition-colors ${connectFrom === n.id ? 'border-brand bg-brand' : 'border-line-strong hover:border-brand'}`}
-                  title="Output"
-                />
-                <button
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => { e.stopPropagation(); handlePortClick(n.id); }}
-                  className={`absolute -left-[7px] top-1/2 -translate-y-1/2 w-[15px] h-[15px] rounded-full border-2 bg-surface hover:border-brand transition-colors ${connectFrom ? 'border-brand/50' : 'border-line-strong'}`}
-                  title="Input"
+              )}
+              {selectedEdge && (
+                <div className="absolute top-3 right-3 flex items-center gap-2 bg-surface/95 backdrop-blur px-3 py-1.5 rounded-full border border-danger/25 shadow-card">
+                  <span className="text-[11px] text-ink-2 font-mono">{selectedEdge.from} → {selectedEdge.to}</span>
+                  <button
+                    onClick={() => {
+                      p.onEdgesChange(p.edges.filter((e) => !(e.from === selectedEdge.from && e.to === selectedEdge.to)));
+                      setSelectedEdge(null);
+                    }}
+                    className="flex items-center gap-1 text-danger text-[11px] font-bold hover:bg-danger/5 rounded-full px-2 py-0.5"
+                  >
+                    <Icon name="trash" size={11} /> Delete
+                  </button>
+                </div>
+              )}
+              {p.selectedIds.length>1 && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-ink text-white px-3 py-1.5 rounded-full text-[11px] font-semibold shadow-pop flex items-center gap-2">
+                  {p.selectedIds.length} nodes selected
+                  <button onClick={()=> p.onDuplicateNodes(p.selectedIds)} className="bg-white/15 hover:bg-white/25 rounded-full px-2 py-0.5 flex items-center gap-1"><Icon name="copy" size={10} /> Duplicate</button>
+                  <button onClick={()=>{
+                    p.onNodesChange(p.nodes.filter(n=> !p.selectedIds.includes(n.id)));
+                    p.onEdgesChange(p.edges.filter(e=> !p.selectedIds.includes(e.from) && !p.selectedIds.includes(e.to)));
+                    p.onSelectIds([]); p.onSelectNode(null);
+                  }} className="bg-danger hover:bg-danger/90 text-white rounded-full px-2 py-0.5 flex items-center gap-1"><Icon name="trash" size={10} /> Delete</button>
+                  <button onClick={()=> {p.onSelectIds([]); p.onSelectNode(null);}} className="hover:bg-white/15 rounded-full p-1"><Icon name="x" size={11} /></button>
+                </div>
+              )}
+              </div>
+            </div>
+          </div>
+          {/* Minimap - fixed overlay, not scrolling */}
+          {showMinimap && (
+            <div className="absolute bottom-3 right-3 w-[180px] h-[120px] bg-surface/95 backdrop-blur border border-line rounded-xl shadow-pop overflow-hidden hidden lg:block z-20">
+              <div className="text-[9px] font-bold tracking-[0.1em] text-ink-3 px-2 py-1 border-b border-line flex items-center justify-between">
+                MINIMAP <span className="text-[9px] font-mono">{Math.round(zoom*100)}%</span>
+              </div>
+              <div className="relative w-full h-[96px] bg-canvas overflow-hidden cursor-pointer"
+                onClick={(e)=>{
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const xPct = (e.clientX - rect.left)/rect.width;
+                  const yPct = (e.clientY - rect.top)/rect.height;
+                  if (scrollContainerRef.current) {
+                    const maxScrollLeft = scaledW - scrollPos.w;
+                    const maxScrollTop = scaledH - scrollPos.h;
+                    scrollContainerRef.current.scrollLeft = xPct * maxScrollLeft;
+                    scrollContainerRef.current.scrollTop = yPct * maxScrollTop;
+                  }
+                }}
+              >
+                {p.nodes.map(n=>{
+                  const nx = (n.x / canvasWidth)*100;
+                  const ny = (n.y / canvasHeight)*100;
+                  const isSel = p.selectedIds.includes(n.id) || p.selectedNodeId===n.id;
+                  return <div key={n.id} className={`absolute w-1.5 h-1.5 rounded-sm ${isSel? 'bg-brand ring-1 ring-brand' : ''}`} style={{ left: `${nx}%`, top: `${ny}%`, background: isSel? 'var(--color-brand)' : n.color }} />;
+                })}
+                <div className="absolute border border-brand/60 bg-brand/10 pointer-events-none"
+                  style={{
+                    left: `${( scrollPos.left / scaledW)*100}%`,
+                    top: `${( scrollPos.top / scaledH)*100}%`,
+                    width: `${ Math.min(100, ( scrollPos.w / scaledW)*100 )}%`,
+                    height: `${ Math.min(100, ( scrollPos.h / scaledH)*100 )}%`,
+                  }}
                 />
               </div>
-            );
-          })}
-
-          <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-surface/95 backdrop-blur px-3 py-1.5 rounded-full border border-line text-[11px] shadow-card">
-            <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
-            <span className="text-ink-2 hidden sm:inline">Drag nodes · click ports to connect · Shift+click multi</span>
-            <span className="text-ink-2 sm:hidden">Drag · Shift multi</span>
-          </div>
-          {connectFrom && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-brand text-brand-fg px-3.5 py-1.5 rounded-full text-[11px] font-semibold shadow-pop flex items-center gap-2">
-              Connecting from <span className="font-mono bg-white/20 px-1.5 rounded">{connectFrom}</span> — click a target
-              <button onClick={() => setConnectFrom(null)} className="hover:bg-white/20 rounded-full p-0.5"><Icon name="x" size={12} /></button>
-            </div>
-          )}
-          {selectedEdge && (
-            <div className="absolute top-3 right-3 flex items-center gap-2 bg-surface/95 backdrop-blur px-3 py-1.5 rounded-full border border-danger/25 shadow-card">
-              <span className="text-[11px] text-ink-2 font-mono">{selectedEdge.from} → {selectedEdge.to}</span>
-              <button
-                onClick={() => {
-                  p.onEdgesChange(p.edges.filter((e) => !(e.from === selectedEdge.from && e.to === selectedEdge.to)));
-                  setSelectedEdge(null);
-                }}
-                className="flex items-center gap-1 text-danger text-[11px] font-bold hover:bg-danger/5 rounded-full px-2 py-0.5"
-              >
-                <Icon name="trash" size={11} /> Delete
-              </button>
-            </div>
-          )}
-          {p.selectedIds.length>1 && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-ink text-white px-3 py-1.5 rounded-full text-[11px] font-semibold shadow-pop flex items-center gap-2">
-              {p.selectedIds.length} nodes selected
-              <button onClick={()=> p.onDuplicateNodes(p.selectedIds)} className="bg-white/15 hover:bg-white/25 rounded-full px-2 py-0.5 flex items-center gap-1"><Icon name="copy" size={10} /> Duplicate</button>
-              <button onClick={()=>{
-                p.onNodesChange(p.nodes.filter(n=> !p.selectedIds.includes(n.id)));
-                p.onEdgesChange(p.edges.filter(e=> !p.selectedIds.includes(e.from) && !p.selectedIds.includes(e.to)));
-                p.onSelectIds([]); p.onSelectNode(null);
-              }} className="bg-danger hover:bg-danger/90 text-white rounded-full px-2 py-0.5 flex items-center gap-1"><Icon name="trash" size={10} /> Delete</button>
-              <button onClick={()=> {p.onSelectIds([]); p.onSelectNode(null);}} className="hover:bg-white/15 rounded-full p-1"><Icon name="x" size={11} /></button>
             </div>
           )}
         </div>
 
-        {/* Minimap */}
-        {showMinimap && (
-          <div className="absolute bottom-3 right-3 w-[180px] h-[120px] bg-surface/95 backdrop-blur border border-line rounded-xl shadow-pop overflow-hidden hidden lg:block">
-            <div className="text-[9px] font-bold tracking-[0.1em] text-ink-3 px-2 py-1 border-b border-line flex items-center justify-between">
-              MINIMAP <span className="text-[9px] font-mono">{Math.round(zoom*100)}%</span>
-            </div>
-            <div className="relative w-full h-[96px] bg-canvas overflow-hidden cursor-pointer"
-              onClick={(e)=>{
-                const rect = e.currentTarget.getBoundingClientRect();
-                const xPct = (e.clientX - rect.left)/rect.width;
-                const yPct = (e.clientY - rect.top)/rect.height;
-                if (scrollContainerRef.current) {
-                  scrollContainerRef.current.scrollLeft = xPct * (canvasWidth*zoom - rect.width);
-                  scrollContainerRef.current.scrollTop = yPct * (canvasHeight*zoom - rect.height);
-                }
-              }}
-            >
-              {/* nodes as dots */}
-              {p.nodes.map(n=>{
-                const nx = (n.x / canvasWidth)*100;
-                const ny = (n.y / canvasHeight)*100;
-                const isSel = p.selectedIds.includes(n.id) || p.selectedNodeId===n.id;
-                return <div key={n.id} className={`absolute w-1.5 h-1.5 rounded-sm ${isSel? 'bg-brand ring-1 ring-brand' : ''}`} style={{ left: `${nx}%`, top: `${ny}%`, background: isSel? 'var(--color-brand)' : n.color }} />;
-              })}
-              {/* viewport rect - synced via scrollPos */}
-              <div className="absolute border border-brand/60 bg-brand/10 pointer-events-none"
-                style={{
-                  left: `${( scrollPos.left / (canvasWidth*zoom))*100}%`,
-                  top: `${( scrollPos.top / (canvasHeight*zoom))*100}%`,
-                  width: `${ Math.min(100, ( (scrollContainerRef.current?.clientWidth||400) / (canvasWidth*zoom))*100 )}%`,
-                  height: `${ Math.min(100, ( (scrollContainerRef.current?.clientHeight||300) / (canvasHeight*zoom))*100 )}%`,
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Inspector */}
+        {/* Inspector */}
         <div className="w-[280px] bg-surface border-l border-line p-3.5 space-y-3 overflow-auto custom-scrollbar hidden lg:block">
           <h4 className="text-[12px] font-bold text-ink flex items-center gap-2">
             <Icon name="sliders" size={13} className="text-ink-3" /> Inspector
