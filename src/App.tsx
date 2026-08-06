@@ -13,6 +13,7 @@ import {
   executeNode,
   getSystemStats,
 } from './lib/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import { DEFAULT_FLOWS, PALETTE } from './data';
 import type { Flow, HookEvent, LogEntry, LogLevel, NodeKind, Settings as AppSettings, TabId } from './types';
 
@@ -62,6 +63,10 @@ function readStoredFlows(): Flow[] {
   try {
     const stored = JSON.parse(localStorage.getItem(FLOWS_STORAGE_KEY) ?? 'null') as Flow[] | null;
     if (!stored || !Array.isArray(stored) || stored.length === 0) return DEFAULT_FLOWS;
+    
+    // Migration: If they have the old Calculator demo, reset it so they get the fresh DuckDuckGo and CMD demos.
+    if (stored.some(f => f.description.includes('Calculator robustly'))) return DEFAULT_FLOWS;
+
     return stored;
   } catch {
     return DEFAULT_FLOWS;
@@ -450,6 +455,29 @@ export default function App() {
     appendLog('info', `[designer] created "${newFlow.name}"`);
   }, [flows.length, appendLog]);
 
+  const handleDeleteFlow = useCallback((id: string) => {
+    setFlows(fs => fs.filter(f => f.id !== id));
+    if (flowId === id) {
+      const remaining = flows.filter(f => f.id !== id);
+      if (remaining.length > 0) setFlowId(remaining[0].id);
+    }
+    appendLog('info', `[dashboard] deleted flow`);
+  }, [flows, flowId, appendLog]);
+
+  const handleExportFlow = useCallback(async (id: string) => {
+    const target = flows.find(f => f.id === id);
+    if (!target) return;
+    try {
+      const result = await invoke<string>('export_flow', { 
+        name: target.name,
+        data: JSON.stringify(target, null, 2)
+      });
+      appendLog('ok', `[export] ${result}`);
+    } catch (e: any) {
+      appendLog('err', `[export] Failed: ${e}`);
+    }
+  }, [flows, appendLog]);
+
   return (
     <div className="flex flex-col w-screen h-screen overflow-hidden bg-surface text-ink">
         {/* Titlebar */}
@@ -577,6 +605,8 @@ export default function App() {
                     }}
                     onImportFlow={handleImportFlow}
                     onCreateFlow={handleCreateFlow}
+                    onDeleteFlow={handleDeleteFlow}
+                    onExportFlow={handleExportFlow}
                   />
                 )}
                 {activeTab === 'designer' && (
@@ -588,16 +618,14 @@ export default function App() {
                     selectedNodeId={selectedNodeId}
                     isExecuting={isExecuting}
                     currentExecNode={currentExecNode}
-                    onSelectFlow={(id) => {
-                      setFlowId(id);
-                      setSelectedNodeId(null);
-                    }}
+                    onSelectFlow={setFlowId}
                     onNodesChange={handleNodesChange}
                     onEdgesChange={handleEdgesChange}
                     onSelectNode={setSelectedNodeId}
                     onAddNode={handleAddNode}
-                    onRun={runFlow}
+                    onRun={(id) => runFlow(id)}
                     onKill={() => triggerKillSwitch('Designer')}
+                    onExportFlow={handleExportFlow}
                   />
                 )}
                 {activeTab === 'settings' && (

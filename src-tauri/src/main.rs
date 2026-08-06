@@ -259,6 +259,15 @@ fn open_url(url: String) {
 }
 
 #[tauri::command]
+fn export_flow(name: String, data: String) -> Result<String, String> {
+    let docs = std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\".to_string()) + "\\Documents";
+    let safe_name = name.replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+    let path = format!("{}\\{}.macroflow", docs, safe_name);
+    std::fs::write(&path, data).map_err(|e| e.to_string())?;
+    Ok(format!("Saved to {}", path))
+}
+
+#[tauri::command]
 fn get_system_stats(state: tauri::State<AppState>) -> (f32, f32) {
     let mut sys = state.sys.lock().unwrap();
     sys.refresh_cpu_usage();
@@ -333,7 +342,7 @@ fn main() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![execute_node, get_system_stats, open_url])
+        .invoke_handler(tauri::generate_handler![execute_node, get_system_stats, open_url, export_flow])
         .run(tauri::generate_context!())
         .expect("error while running MacroFlow");
 }

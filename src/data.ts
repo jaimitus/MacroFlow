@@ -38,8 +38,8 @@ export const DEFAULT_FLOWS: Flow[] = [
     enabled: true,
     nodes: [
       { id: 't1', kind: 'hotkey', category: 'trigger', label: 'Trigger', x: 40, y: 150, config: { hotkey: 'Run' }, color: '#0078D4', icon: 'keyboard' },
-      { id: 'a1', kind: 'open_url', category: 'action', label: 'Open Google', x: 260, y: 150, config: { url: 'https://google.com' }, color: '#8764B8', icon: 'send' },
-      { id: 'a2', kind: 'delay', category: 'action', label: 'Wait for load', x: 480, y: 150, config: { ms: '2000' }, color: '#5C6370', icon: 'timer' },
+      { id: 'a1', kind: 'open_url', category: 'action', label: 'Open DuckDuckGo', x: 260, y: 150, config: { url: 'https://duckduckgo.com' }, color: '#8764B8', icon: 'send' },
+      { id: 'a2', kind: 'delay', category: 'action', label: 'Wait for load', x: 480, y: 150, config: { ms: '4000' }, color: '#5C6370', icon: 'timer' },
       { id: 'a3', kind: 'send_keys', category: 'action', label: 'Search query', x: 700, y: 150, config: { keys: 'MacroFlow automation tool{ENTER}' }, color: '#4A5568', icon: 'type' },
     ],
     edges: [
@@ -50,8 +50,8 @@ export const DEFAULT_FLOWS: Flow[] = [
   },
   {
     id: 'flow-2',
-    name: 'Logic & Calculator Demo',
-    description: 'Sets clipboard, checks condition, and uses Calculator robustly',
+    name: 'CMD Automations',
+    description: 'Sets clipboard, checks condition, and uses CMD robustly',
     enabled: true,
     nodes: [
       { id: 't1', kind: 'hotkey', category: 'trigger', label: 'Trigger', x: 40, y: 150, config: { hotkey: 'Run' }, color: '#0078D4', icon: 'keyboard' },

@@ -27,6 +27,7 @@ export interface DashboardProps {
   onImportFlow: (flow: Flow) => void;
   onCreateFlow: () => void;
   onDeleteFlow: (id: string) => void;
+  onExportFlow: (id: string) => void;
 }
 
 export default function Dashboard(p: DashboardProps) {
@@ -162,15 +163,7 @@ export default function Dashboard(p: DashboardProps) {
                     <Icon name="play" size={15} />
                   </button>
                   <button
-                    onClick={() => {
-                      const blob = new Blob([JSON.stringify(f, null, 2)], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `${f.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.macroflow`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
+                    onClick={() => p.onExportFlow(f.id)}
                     className="flex items-center gap-1.5 bg-surface border border-line text-ink-2 px-3 py-1.5 rounded-lg hover:text-brand hover:border-brand/50 hover:bg-brand/5 transition-colors shrink-0 text-[11px] font-bold uppercase tracking-wide"
                     title="Export .macroflow"
                   >
