@@ -130,8 +130,20 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
         }
         "send_keys" => {
             let keys = config.get("keys").cloned().unwrap_or_default();
-            let mut enigo = Enigo::new();
-            send_keys_str(&mut enigo, &keys);
+            // Format keys for System.Windows.Forms.SendKeys
+            // Replace {ENTER} with {ENTER}, {TAB} with {TAB}, etc.
+            let ps_keys = keys
+                .replace("'", "''");
+            
+            let script = format!(
+                "Add-Type -AssemblyName System.Windows.Forms; \
+                [System.Windows.Forms.SendKeys]::SendWait('{}')",
+                ps_keys
+            );
+            let _ = std::process::Command::new("powershell")
+                .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
+                .creation_flags(CREATE_NO_WINDOW)
+                .status();
             Ok("Keys sent".to_string())
         }
         "clipboard_set" => {
@@ -273,6 +285,21 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
                 .creation_flags(CREATE_NO_WINDOW)
                 .status();
             Ok("Sound played".to_string())
+        }
+        "web_search" => {
+            let query = config.get("query").cloned().unwrap_or_default();
+            let engine = config.get("engine").cloned().unwrap_or_else(|| "google".to_string());
+            let base = match engine.to_lowercase().as_str() {
+                "duckduckgo" => "https://duckduckgo.com/?q=",
+                "bing" => "https://www.bing.com/search?q=",
+                _ => "https://www.google.com/search?q=",
+            };
+            let encoded = query.replace(" ", "+");
+            let url = format!("{}{}", base, encoded);
+            let _ = std::process::Command::new("cmd")
+                .args(&["/C", "start", &url])
+                .spawn();
+            Ok(format!("Searched '{}' via {}", query, engine))
         }
         _ => Ok("Simulated (Not fully implemented yet)".into())
     }

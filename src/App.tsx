@@ -86,32 +86,6 @@ const sleep = (ms: number, signal: AbortSignal) =>
       if (settled) return;
       settled = true;
       window.clearTimeout(timeoutId);
-      signal.removeEventListener('abort', finish);
-      resolve();
-    };
-
-    const timeoutId = window.setTimeout(finish, ms);
-    signal.addEventListener('abort', finish, { once: true });
-  });
-
-function topologicalOrder(nodes: Flow['nodes'], edges: Flow['edges']): string[] {
-  const adj = new Map<string, string[]>();
-  edges.forEach((e) => {
-    if (!adj.has(e.from)) adj.set(e.from, []);
-    adj.get(e.from)!.push(e.to);
-  });
-  const seen = new Set<string>();
-  const order: string[] = [];
-  const q = nodes.filter((n) => n.category === 'trigger').map((n) => n.id);
-  let cursor = 0;
-  while (cursor < q.length) {
-    const cur = q[cursor++];
-    if (seen.has(cur)) continue;
-    seen.add(cur);
-    order.push(cur);
-    (adj.get(cur) ?? []).forEach((n) => q.push(n));
-  }
-  nodes.forEach((n) => {
     if (!seen.has(n.id)) order.push(n.id);
   });
   return order;

@@ -18,7 +18,8 @@ export type ActionKind =
   | 'take_screenshot'
   | 'http_request'
   | 'file_write'
-  | 'play_sound';
+  | 'play_sound'
+  | 'web_search';
 export type NodeKind = TriggerKind | ActionKind;
 
 export interface FlowNode {

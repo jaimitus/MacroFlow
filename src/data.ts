@@ -22,6 +22,7 @@ export const PALETTE: PaletteItem[] = [
   { kind: 'http_request', label: 'HTTP Request', cat: 'action', icon: 'globe', color: '#0F6CBD', desc: 'GET/POST API' },
   { kind: 'file_write', label: 'Write File', cat: 'action', icon: 'terminal', color: '#107C10', desc: 'save text' },
   { kind: 'play_sound', label: 'Play Sound', cat: 'action', icon: 'bell', color: '#E01765', desc: 'beep alert' },
+  { kind: 'web_search', label: 'Web Search', cat: 'action', icon: 'search', color: '#0078D4', desc: 'instant search' },
 ];
 
 export const VARIABLES = [
