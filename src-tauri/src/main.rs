@@ -84,20 +84,24 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
         }
         "send_keys" => {
             let keys = config.get("keys").cloned().unwrap_or_default();
-            let script = format!(
-                "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::Send('{}')",
-                keys.replace("'", "''").replace("{CLIPBOARD}", "^v")
-            );
-            let _ = std::process::Command::new("powershell")
-                .args(&["-WindowStyle", "Hidden", "-Command", &script])
+            let keys = keys.replace("\"", "\"\"").replace("{CLIPBOARD}", "^v");
+            let script = format!("CreateObject(\"WScript.Shell\").SendKeys \"{}\"", keys);
+            
+            let temp_path = std::env::temp_dir().join("macroflow_keys.vbs");
+            let _ = std::fs::write(&temp_path, script);
+            
+            let _ = std::process::Command::new("wscript")
+                .args(&[temp_path.to_str().unwrap()])
                 .status();
+                
+            let _ = std::fs::remove_file(temp_path);
             Ok("Keys sent".to_string())
         }
         "clipboard_set" => {
             let value = config.get("value").cloned().unwrap_or_default();
             let script = format!("Set-Clipboard -Value '{}'", value.replace("'", "''"));
             let _ = std::process::Command::new("powershell")
-                .args(&["-WindowStyle", "Hidden", "-Command", &script])
+                .args(&["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &script])
                 .status();
             Ok("Clipboard updated".to_string())
         }
