@@ -5,6 +5,7 @@ import Designer from './components/Designer';
 import Settings from './components/Settings';
 import { useSafeTimers } from './hooks/useSafeTimers';
 import { useTheme } from './hooks/useTheme';
+import { useFlowHistory } from './hooks/useFlowHistory';
 import {
   bindTauriEvents,
   closeWindow,
@@ -16,6 +17,7 @@ import {
 import { invoke } from '@tauri-apps/api/core';
 import { DEFAULT_FLOWS, PALETTE } from './data';
 import type { Flow, HookEvent, LogEntry, LogLevel, NodeKind, Settings as AppSettings, TabId } from './types';
+import { autoLayout } from './utils/layout';
 
 let logSeq = 0;
 const now = () =>
@@ -50,8 +52,6 @@ function readStoredSettings(): AppSettings {
       killSwitch: typeof stored.killSwitch === 'string' ? stored.killSwitch : DEFAULT_SETTINGS.killSwitch,
     };
   } catch {
-    // A malformed or unavailable browser storage must not prevent the app from
-    // starting with safe defaults.
     return DEFAULT_SETTINGS;
   }
 }
@@ -63,53 +63,70 @@ function readStoredFlows(): Flow[] {
   try {
     const stored = JSON.parse(localStorage.getItem(FLOWS_STORAGE_KEY) ?? 'null') as Flow[] | null;
     if (!stored || !Array.isArray(stored) || stored.length === 0) return DEFAULT_FLOWS;
-    
-    // Migration: If they don't have the new flow-matrix demo, reset flows to show the Matrix Patrol demo!
-    if (!stored.some(f => f.id === 'flow-matrix')) return DEFAULT_FLOWS;
-
+    // Migration: ensure matrix demo exists without wiping user flows
+    const hasMatrix = stored.some(f => f.id === 'flow-matrix');
+    if (!hasMatrix) {
+      const matrix = DEFAULT_FLOWS.find(f=>f.id==='flow-matrix');
+      if (matrix) return [matrix!, ...stored];
+    }
     return stored;
   } catch {
     return DEFAULT_FLOWS;
   }
 }
 
-const sleep = (ms: number, signal: AbortSignal) =>
-  new Promise<void>((resolve) => {
-    if (signal.aborted) {
-      resolve();
-      return;
-    }
-
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timeoutId);
-      signal.removeEventListener('abort', finish);
-      resolve();
-    };
-
-    const timeoutId = window.setTimeout(finish, ms);
-    signal.addEventListener('abort', finish, { once: true });
-  });
-
 export default function App() {
   const { pref, resolved, setPref, toggle } = useTheme();
   const timers = useSafeTimers();
 
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
-  const [flows, setFlows] = useState<Flow[]>(() => readStoredFlows());
+  const [flows, setFlowsRaw] = useState<Flow[]>(() => readStoredFlows());
   const [flowId, setFlowId] = useState('flow-matrix');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [executingFlowId, setExecutingFlowId] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings>(() => readStoredSettings());
+
+  const history = useFlowHistory(flows);
+
+  // Wrapped setFlows that also pushes to history
+  const setFlows = useCallback((updater: Flow[] | ((prev: Flow[]) => Flow[])) => {
+    setFlowsRaw(prev => {
+      const next = typeof updater === 'function' ? (updater as (prev: Flow[])=>Flow[])(prev) : updater;
+      // only push if not during undo/redo
+      if (!history.isApplying()) {
+        // Use a microtask to push after state committed? Push now synchronously
+        // But history.push expects Flow[] snapshot. We'll call after.
+        // Since setFlowsRaw is async, we push cloned next
+        queueMicrotask(() => history.push(next));
+      }
+      return next;
+    });
+  }, [history]);
+
+  // Keep history synced on first mount (already initialized with initial)
+  // But we need to handle pushes for future updates via effect watching flows would duplicate.
+  // Instead we rely on setFlows wrapper above. Also ensure initial is not duplicated.
+  // For external pushes (undo/redo) we need to apply without pushing.
+
+  const handleUndo = useCallback(() => {
+    const prev = history.undo();
+    if (prev) {
+      setFlowsRaw(prev);
+    }
+  }, [history]);
+
+  const handleRedo = useCallback(() => {
+    const nxt = history.redo();
+    if (nxt) {
+      setFlowsRaw(nxt);
+    }
+  }, [history]);
 
   useEffect(() => {
     try {
       localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-    } catch {
-      // Storage is optional (for example in a locked-down WebView).
-    }
+    } catch {}
   }, [settings]);
 
   useEffect(() => {
@@ -141,10 +158,8 @@ export default function App() {
   const runFlowRef = useRef<() => void>(() => {});
   const killSwitchRef = useRef<(source: string) => void>(() => {});
   const eventSeq = useRef(1);
+  const copyBufferRef = useRef<Flow['nodes'] | null>(null);
 
-  // Abort any in-flight execution when the app is torn down. This also makes
-  // the async runner safe during React StrictMode remounts and native window
-  // disposal: no continuation can retain the component indefinitely.
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -169,12 +184,10 @@ export default function App() {
     (source: string) => {
       setKillFlash(true);
       timers.setTimeout(() => setKillFlash(false), 900);
-
       if (!executingRef.current) {
         appendLog('warn', `[stop] ${source} · nothing running`);
         return;
       }
-
       appendLog('err', `[stop] emergency abort from ${source}`);
       abortRef.current?.abort();
     },
@@ -185,14 +198,58 @@ export default function App() {
     killSwitchRef.current = triggerKillSwitch;
   }, [triggerKillSwitch]);
 
-  // Global kill switch + hook simulation
+  // Global keyboard: kill switch + hook simulation + designer hotkeys
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // kill switch
       if (e.ctrlKey && e.shiftKey && e.code === 'Escape') {
         e.preventDefault();
         killSwitchRef.current('Ctrl+Shift+Esc');
         return;
       }
+      // Undo/Redo only when designer active or not typing in input
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (!isInput) {
+        if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'z') {
+          e.preventDefault();
+          handleUndo();
+          appendLog('info', '[history] undo');
+          return;
+        }
+        if ((e.ctrlKey && e.key.toLowerCase() === 'y') || (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'z')) {
+          e.preventDefault();
+          handleRedo();
+          appendLog('info', '[history] redo');
+          return;
+        }
+        if (e.ctrlKey && e.key.toLowerCase() === 'd' && selectedNodeId) {
+          e.preventDefault();
+          handleDuplicateNodes([selectedNodeId]);
+          return;
+        }
+        if (e.ctrlKey && e.key.toLowerCase() === 'c' && selectedIds.length>0) {
+          // copy
+          const curFlow = flows.find(f=>f.id===flowId);
+          if (curFlow) {
+            const toCopy = curFlow.nodes.filter(n=> selectedIds.includes(n.id) || n.id===selectedNodeId);
+            if (toCopy.length>0) {
+              copyBufferRef.current = JSON.parse(JSON.stringify(toCopy));
+              appendLog('info', `[copy] ${toCopy.length} node(s) copied`);
+            }
+          }
+          return;
+        }
+        if (e.ctrlKey && e.key.toLowerCase() === 'v' && copyBufferRef.current) {
+          e.preventDefault();
+          handlePaste();
+          return;
+        }
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput && (selectedNodeId || selectedIds.length>0)) {
+          // delete selected nodes via Designer handler? We'll let Designer handle Delete, but also here as fallback
+        }
+      }
+
       if (e.ctrlKey && e.altKey && e.key.length === 1) {
         const id = ++eventSeq.current;
         setHookEvents((p) =>
@@ -214,12 +271,8 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [recordLatency]);
+  }, [recordLatency, handleUndo, handleRedo, selectedNodeId, selectedIds, flows, flowId, appendLog]);
 
-  // Native bridge (Tauri global shortcut + tray) — no-ops in the browser.
-  // Refs keep this subscription stable while still calling the latest
-  // callbacks; rebinding it on every execution state change is unnecessary and
-  // can race with the asynchronous `listen()` registration.
   useEffect(() => {
     let disposed = false;
     let dispose = () => {};
@@ -236,7 +289,6 @@ export default function App() {
     };
   }, []);
 
-  // Resource heartbeat (Real hardware metrics)
   useEffect(() => {
     let active = true;
     const fetchStats = async () => {
@@ -245,7 +297,6 @@ export default function App() {
       setCpuHistory((h) => [...h.slice(-39), +cpu.toFixed(1)]);
       setRamHistory((h) => [...h.slice(-39), +ram.toFixed(1)]);
     };
-    
     void fetchStats();
     const id = timers.setInterval(() => void fetchStats(), 1200);
     return () => {
@@ -256,11 +307,11 @@ export default function App() {
 
   const handleNodesChange = useCallback(
     (nodes: Flow['nodes']) => setFlows((fs) => fs.map((f) => (f.id === flowId ? { ...f, nodes } : f))),
-    [flowId]
+    [flowId, setFlows]
   );
   const handleEdgesChange = useCallback(
     (edges: Flow['edges']) => setFlows((fs) => fs.map((f) => (f.id === flowId ? { ...f, edges } : f))),
-    [flowId]
+    [flowId, setFlows]
   );
 
   const handleAddNode = useCallback(
@@ -279,7 +330,7 @@ export default function App() {
           : kind === 'send_keys'
             ? { keys: 'Hello {CLIPBOARD}' }
             : kind === 'powershell'
-              ? { script: 'Write-Output "ok"', timeout_ms: '5000' }
+              ? { script: 'Write-Output \"ok\"', timeout_ms: '5000' }
               : kind === 'notification'
                 ? { title: 'MacroFlow', body: 'Action completed' }
                 : kind === 'open_url'
@@ -296,7 +347,17 @@ export default function App() {
                           ? { x: '500', y: '500' }
                           : kind === 'take_screenshot'
                             ? { filename: 'screenshot.png' }
-                            : { value: '…' };
+                            : kind === 'http_request'
+                              ? { url: 'https://api.example.com', method: 'GET' }
+                              : kind === 'file_write'
+                                ? { path: '{DOCS_PATH}\\output.txt', content: 'Hello {DATE}' }
+                                : kind === 'web_search'
+                                  ? { query: 'MacroFlow', engine: 'google' }
+                                  : kind === 'repeat'
+                                    ? { count: '3' }
+                                    : kind === 'condition'
+                                      ? { expr: 'len({CLIPBOARD}) > 0', then: '', else: '' }
+                                      : { value: '…' };
       const node: Flow['nodes'][number] = {
         id,
         kind,
@@ -308,28 +369,88 @@ export default function App() {
         color: tpl.color,
         icon: tpl.icon,
       };
+      // Track recent palette usage
+      try {
+        const key = 'macroflow.recent';
+        const raw = JSON.parse(localStorage.getItem(key) || '[]') as string[];
+        const updated = [kind, ...raw.filter(k=>k!==kind)].slice(0,6);
+        localStorage.setItem(key, JSON.stringify(updated));
+      } catch {}
+      // Determine primary selection for auto-connect
+      const connectFrom = selectedIds.length===1 ? selectedIds[0] : selectedNodeId;
       setFlows((fs) =>
         fs.map((f) => {
           if (f.id !== flowId) return f;
-          const edges = selectedNodeId ? [...f.edges, { from: selectedNodeId, to: id }] : f.edges;
+          const edges = connectFrom ? [...f.edges, { from: connectFrom, to: id }] : f.edges;
           return { ...f, nodes: [...f.nodes, node], edges };
         })
       );
       setSelectedNodeId(id);
+      setSelectedIds([id]);
       appendLog('info', `[designer] added ${tpl.label}`);
     },
-    [flowId, selectedNodeId, flows, appendLog]
+    [flowId, selectedNodeId, selectedIds, flows, appendLog, setFlows]
   );
 
-  const runFlow = useCallback(async (overrideFlowId?: string) => {
-    // State updates are asynchronous, so `isExecuting` alone cannot prevent
-    // two same-tick clicks/native events from starting two runners. The ref is
-    // the synchronous execution lock; the state remains the render signal.
-    if (executingRef.current) return;
+  const handleDuplicateNodes = useCallback((ids: string[]) => {
+    const cur = flows.find(f=>f.id===flowId);
+    if (!cur) return;
+    const toDup = cur.nodes.filter(n=>ids.includes(n.id));
+    if (toDup.length===0) return;
+    const idMap = new Map<string,string>();
+    const newNodes = toDup.map(n=>{
+      let nid = `n-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
+      while (cur.nodes.some(x=>x.id===nid) || Array.from(idMap.values()).includes(nid)) {
+        nid = `n-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
+      }
+      idMap.set(n.id, nid);
+      return { ...n, id: nid, x: n.x + 24, y: n.y + 24, label: n.label + ' copy' };
+    });
+    // duplicate internal edges
+    const internalEdges = cur.edges.filter(e=> idMap.has(e.from) && idMap.has(e.to)).map(e=> ({ from: idMap.get(e.from)!, to: idMap.get(e.to)!}));
+    setFlows(fs=> fs.map(f=> f.id!==flowId ? f : { ...f, nodes: [...f.nodes, ...newNodes], edges: [...f.edges, ...internalEdges]}));
+    const newIds = newNodes.map(n=>n.id);
+    setSelectedIds(newIds);
+    setSelectedNodeId(newIds[0]||null);
+    appendLog('info', `[designer] duplicated ${newNodes.length} node(s)`);
+  }, [flows, flowId, appendLog, setFlows]);
 
+  const handlePaste = useCallback(()=>{
+    const buf = copyBufferRef.current;
+    if (!buf || buf.length===0) return;
+    const cur = flows.find(f=>f.id===flowId);
+    if (!cur) return;
+    const idMap = new Map<string,string>();
+    const newNodes = buf.map(n=>{
+      let nid = `n-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
+      while (cur.nodes.some(x=>x.id===nid) || Array.from(idMap.values()).includes(nid)) nid = `n-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
+      idMap.set(n.id, nid);
+      return { ...JSON.parse(JSON.stringify(n)), id: nid, x: n.x + 32, y: n.y + 32, label: n.label };
+    });
+    const internalEdges = buf.length>1 ? (() => {
+      // Reconstruct edges among buffered nodes by looking at original flow edges that were among buffered ids
+      const origFlow = flows.find(f=> buf.every(b=> f.nodes.some(nn=>nn.id===b.id))) || cur;
+      return origFlow.edges.filter(e=> idMap.has(e.from) && idMap.has(e.to)).map(e=> ({ from: idMap.get(e.from)!, to: idMap.get(e.to)!}));
+    })() : [];
+    setFlows(fs=> fs.map(f=> f.id!==flowId ? f : { ...f, nodes: [...f.nodes, ...newNodes], edges: [...f.edges, ...internalEdges]}));
+    const newIds = newNodes.map(n=>n.id);
+    setSelectedIds(newIds);
+    setSelectedNodeId(newIds[0]||null);
+    appendLog('info', `[paste] ${newNodes.length} node(s)`);
+  }, [flows, flowId, appendLog, setFlows]);
+
+  const handleAutoLayout = useCallback(()=>{
+    const cur = flows.find(f=>f.id===flowId);
+    if (!cur) return;
+    const laid = autoLayout(cur.nodes, cur.edges);
+    setFlows(fs=> fs.map(f=> f.id===flowId ? { ...f, nodes: laid } : f));
+    appendLog('info', '[layout] auto-arranged');
+  }, [flows, flowId, setFlows, appendLog]);
+
+  const runFlow = useCallback(async (overrideFlowId?: string) => {
+    if (executingRef.current) return;
     const targetFlow = overrideFlowId ? flows.find(f => f.id === overrideFlowId) : flow;
     if (!targetFlow) return;
-
     const ctl = new AbortController();
     executingRef.current = true;
     abortRef.current = ctl;
@@ -339,31 +460,24 @@ export default function App() {
       setCurrentExecNode(null);
       appendLog('info', `[engine] ▶ running "${targetFlow.name}" · ${targetFlow.nodes.length} nodes`);
     }
-
     try {
       const triggers = targetFlow.nodes.filter((n) => n.category === 'trigger').map((n) => n.id);
       const q = triggers.length > 0 ? [...triggers] : targetFlow.nodes.length > 0 ? [targetFlow.nodes[0].id] : [];
       const seen = new Set<string>();
       const repeatCounts = new Map<string, number>();
-
       while (q.length > 0) {
         if (ctl.signal.aborted) break;
         const id = q.shift()!;
-
         const node = targetFlow.nodes.find((n) => n.id === id);
         if (!node) continue;
-
         if (node.kind === 'repeat') {
           const maxLoops = parseInt(node.config.count || '3', 10);
           const currentLoop = (repeatCounts.get(id) || 0) + 1;
           repeatCounts.set(id, currentLoop);
-
           if (currentLoop > maxLoops) {
             seen.add(id);
             continue;
           }
-
-          // Unmark target loop nodes so they can execute again
           const loopTargetId = node.config.target || targetFlow.edges.find((e) => e.from === id)?.to;
           if (loopTargetId) {
             const resetStack = [loopTargetId];
@@ -380,7 +494,6 @@ export default function App() {
           if (seen.has(id)) continue;
           seen.add(id);
         }
-
         if (mountedRef.current) {
           setCurrentExecNode(id);
           appendLog('inject', `[run] → ${node.label}`);
@@ -394,7 +507,6 @@ export default function App() {
             appendLog('ok', `[done] ${node.label} (${result})`);
             recordLatency(t1 - t0);
           }
-
           let nextNodes: string[] = [];
           if (node.kind === 'condition') {
              const branchId = result === 'true' ? node.config.then : node.config.else;
@@ -410,7 +522,6 @@ export default function App() {
           break;
         }
       }
-
       if (mountedRef.current) {
         appendLog(
           ctl.signal.aborted ? 'warn' : 'ok',
@@ -420,8 +531,6 @@ export default function App() {
         );
       }
     } finally {
-      // Only clear the controller that belongs to this run. This protects the
-      // ref if a future runner is ever started during teardown/race handling.
       if (abortRef.current === ctl) abortRef.current = null;
       executingRef.current = false;
       if (mountedRef.current) {
@@ -442,7 +551,7 @@ export default function App() {
   const handleImportFlow = useCallback((flow: Flow) => {
     setFlows((fs) => [...fs, flow]);
     appendLog('ok', `[import] imported flow "${flow.name}"`);
-  }, [appendLog]);
+  }, [appendLog, setFlows]);
 
   const handleCreateFlow = useCallback(() => {
     const newFlow: Flow = {
@@ -457,7 +566,7 @@ export default function App() {
     setFlowId(newFlow.id);
     setActiveTab('designer');
     appendLog('info', `[designer] created "${newFlow.name}"`);
-  }, [flows.length, appendLog]);
+  }, [flows.length, appendLog, setFlows]);
 
   const handleDeleteFlow = useCallback((id: string) => {
     setFlows(fs => fs.filter(f => f.id !== id));
@@ -466,7 +575,43 @@ export default function App() {
       if (remaining.length > 0) setFlowId(remaining[0].id);
     }
     appendLog('info', `[dashboard] deleted flow`);
-  }, [flows, flowId, appendLog]);
+  }, [flows, flowId, appendLog, setFlows]);
+
+  const handleDuplicateFlow = useCallback((id?: string) => {
+    const srcId = id || flowId;
+    const src = flows.find(f=>f.id===srcId);
+    if (!src) return;
+    const clone: Flow = JSON.parse(JSON.stringify(src));
+    clone.id = `flow-${Date.now()}`;
+    clone.name = src.name + ' Copy';
+    // regenerate node ids to avoid collisions? Keep same ids within cloned flow is fine because flow is isolated
+    // But to be safe, regenerate
+    const idMap = new Map<string,string>();
+    clone.nodes = clone.nodes.map(n=>{
+      const nid = `n-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
+      idMap.set(n.id, nid);
+      return { ...n, id: nid };
+    });
+    clone.edges = clone.edges.map(e=> ({ from: idMap.get(e.from)||e.from, to: idMap.get(e.to)||e.to}));
+    // fix condition then/else references
+    clone.nodes = clone.nodes.map(n=>{
+      if (n.kind==='condition') {
+        const nc = { ...n.config };
+        if (nc.then) nc.then = idMap.get(nc.then) || nc.then;
+        if (nc.else) nc.else = idMap.get(nc.else) || nc.else;
+        return { ...n, config: nc };
+      }
+      return n;
+    });
+    setFlows(fs=> [...fs, clone]);
+    setFlowId(clone.id);
+    appendLog('info', `[flow] duplicated "${src.name}"`);
+  }, [flows, flowId, appendLog, setFlows]);
+
+  const handleRenameFlow = useCallback((id: string, name: string, description?: string)=>{
+    setFlows(fs=> fs.map(f=> f.id===id ? { ...f, name: name.trim()||f.name, description: description!==undefined ? description : f.description } : f));
+    appendLog('info', `[flow] renamed to "${name}"`);
+  }, [appendLog, setFlows]);
 
   const handleExportFlow = useCallback(async (id: string) => {
     const target = flows.find(f => f.id === id);
@@ -484,7 +629,6 @@ export default function App() {
 
   return (
     <div className="flex flex-col w-screen h-screen overflow-hidden bg-surface text-ink">
-        {/* Titlebar */}
         <div data-tauri-drag-region className="h-[46px] flex items-center justify-between px-3 select-none shrink-0 bg-elevated border-b border-line">
           <div data-tauri-drag-region className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand to-brand-strong grid place-items-center text-brand-fg shadow">
@@ -495,6 +639,12 @@ export default function App() {
               <span className={`w-1.5 h-1.5 rounded-full ${isExecuting ? 'bg-warn animate-pulse' : 'bg-success'}`} />
               {isExecuting ? 'Running' : 'Idle'} · {(cpuHistory.at(-1) ?? 0.4).toFixed(1)}% CPU
             </span>
+            {(history.canUndo || history.canRedo) && (
+              <span className="hidden xl:inline-flex items-center gap-1 text-[10px] text-ink-3 ml-2">
+                <span className="w-px h-4 bg-line mx-1" />
+                Ctrl+Z / Ctrl+Y
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -506,35 +656,13 @@ export default function App() {
               <span className="text-[11px] font-medium capitalize hidden sm:inline">{pref}</span>
             </button>
             <div className="w-px h-5 bg-line mx-1" />
-            <button
-              type="button"
-              onClick={() => void minimizeWindow()}
-              aria-label="Minimize window"
-              className="w-9 h-8 grid place-items-center hover:bg-ink/[0.06] rounded-lg text-ink-2 transition-colors"
-            >
-              <Icon name="minus" size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={() => void toggleMaximizeWindow()}
-              aria-label="Maximize window"
-              className="w-9 h-8 grid place-items-center hover:bg-ink/[0.06] rounded-lg text-ink-2 transition-colors"
-            >
-              <Icon name="square" size={12} />
-            </button>
-            <button
-              type="button"
-              onClick={() => void closeWindow(settings.minimizeToTray)}
-              aria-label={settings.minimizeToTray ? 'Hide to system tray' : 'Close window'}
-              className="w-9 h-8 grid place-items-center hover:bg-danger hover:text-white rounded-lg text-ink-2 transition-colors"
-            >
-              <Icon name="x" size={14} />
-            </button>
+            <button type="button" onClick={() => void minimizeWindow()} aria-label="Minimize" className="w-9 h-8 grid place-items-center hover:bg-ink/[0.06] rounded-lg text-ink-2 transition-colors"><Icon name="minus" size={14} /></button>
+            <button type="button" onClick={() => void toggleMaximizeWindow()} aria-label="Maximize" className="w-9 h-8 grid place-items-center hover:bg-ink/[0.06] rounded-lg text-ink-2 transition-colors"><Icon name="square" size={12} /></button>
+            <button type="button" onClick={() => void closeWindow(settings.minimizeToTray)} aria-label={settings.minimizeToTray ? 'Hide to tray' : 'Close'} className="w-9 h-8 grid place-items-center hover:bg-danger hover:text-white rounded-lg text-ink-2 transition-colors"><Icon name="x" size={14} /></button>
           </div>
         </div>
 
         <div className="flex flex-1 min-h-0">
-          {/* Sidebar */}
           <div className="w-[62px] lg:w-[196px] bg-elevated border-r border-line flex flex-col shrink-0">
             <div className="p-2 lg:p-2.5 space-y-1">
               {NAV.map((it) => (
@@ -553,35 +681,23 @@ export default function App() {
                 </button>
               ))}
             </div>
-
             <div className="mt-auto p-2.5 hidden lg:block">
               <div className="rounded-xl bg-gradient-to-br from-danger to-[#a81c27] p-3 text-white shadow-card">
                 <div className="text-[9.5px] font-bold tracking-[0.16em] opacity-85 flex items-center gap-1"><Icon name="shield" size={11} /> KILL SWITCH</div>
                 <div className="text-[12px] font-black mt-0.5">Ctrl + Shift + X</div>
-                <button
-                  onClick={() => triggerKillSwitch('Sidebar')}
-                  className="mt-2 w-full bg-white/95 hover:bg-white text-danger text-[10.5px] font-black py-1.5 rounded-lg transition-colors"
-                >
-                  TEST STOP
-                </button>
+                <button onClick={() => triggerKillSwitch('Sidebar')} className="mt-2 w-full bg-white/95 hover:bg-white text-danger text-[10.5px] font-black py-1.5 rounded-lg transition-colors">TEST STOP</button>
               </div>
-              <div className="flex items-center gap-2 px-1 mt-2.5 text-[10.5px] text-ink-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-success" /> v1.5.0 · Win 10/11
-              </div>
+              <div className="flex items-center gap-2 px-1 mt-2.5 text-[10.5px] text-ink-3"><span className="w-1.5 h-1.5 rounded-full bg-success" /> v1.5.0 · Win 10/11</div>
             </div>
           </div>
 
-          {/* Content */}
           <div className="flex-1 min-w-0 bg-canvas relative overflow-hidden flex flex-col">
             {killFlash && (
               <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center">
                 <div className="absolute inset-0 bg-danger/15 backdrop-blur-[1.5px] kill-flash" />
                 <div className="relative bg-danger text-white px-7 py-4 rounded-2xl shadow-pop flex items-center gap-4 kill-flash">
                   <Icon name="shield" size={28} strokeWidth={2.2} />
-                  <div>
-                    <div className="font-black text-[15px] tracking-wide">EMERGENCY STOP</div>
-                    <div className="text-[12px] opacity-90 mt-0.5">Aborting all running macros…</div>
-                  </div>
+                  <div><div className="font-black text-[15px] tracking-wide">EMERGENCY STOP</div><div className="text-[12px] opacity-90 mt-0.5">Aborting all running macros…</div></div>
                 </div>
               </div>
             )}
@@ -602,15 +718,13 @@ export default function App() {
                     onRun={(id) => runFlow(id)}
                     onKill={triggerKillSwitch}
                     onToggleFlow={toggleFlow}
-                    onEditFlow={(id) => {
-                      setFlowId(id);
-                      setSelectedNodeId(null);
-                      setActiveTab('designer');
-                    }}
+                    onEditFlow={(id) => { setFlowId(id); setSelectedNodeId(null); setSelectedIds([]); setActiveTab('designer'); }}
                     onImportFlow={handleImportFlow}
                     onCreateFlow={handleCreateFlow}
                     onDeleteFlow={handleDeleteFlow}
                     onExportFlow={handleExportFlow}
+                    onDuplicateFlow={handleDuplicateFlow}
+                    onRenameFlow={handleRenameFlow}
                   />
                 )}
                 {activeTab === 'designer' && (
@@ -620,16 +734,27 @@ export default function App() {
                     nodes={flow.nodes}
                     edges={flow.edges}
                     selectedNodeId={selectedNodeId}
+                    selectedIds={selectedIds}
                     isExecuting={isExecuting}
                     currentExecNode={currentExecNode}
+                    canUndo={history.canUndo}
+                    canRedo={history.canRedo}
                     onSelectFlow={setFlowId}
                     onNodesChange={handleNodesChange}
                     onEdgesChange={handleEdgesChange}
                     onSelectNode={setSelectedNodeId}
+                    onSelectIds={setSelectedIds}
                     onAddNode={handleAddNode}
                     onRun={(id) => runFlow(id)}
                     onKill={() => triggerKillSwitch('Designer')}
                     onExportFlow={handleExportFlow}
+                    onUndo={handleUndo}
+                    onRedo={handleRedo}
+                    onDuplicateNodes={handleDuplicateNodes}
+                    onPaste={handlePaste}
+                    onAutoLayout={handleAutoLayout}
+                    onDuplicateFlow={handleDuplicateFlow}
+                    onRenameFlow={handleRenameFlow}
                   />
                 )}
                 {activeTab === 'settings' && (
@@ -638,17 +763,10 @@ export default function App() {
               </div>
             </div>
 
-            {/* Status bar */}
             <div className="h-[28px] bg-elevated border-t border-line flex items-center px-3 gap-3 text-[11px] shrink-0">
-              <span className="inline-flex items-center gap-1.5 text-ink-2">
-                <span className={`w-2 h-2 rounded-full ${isExecuting ? 'bg-warn animate-pulse' : 'bg-success'}`} />
-                {isExecuting ? 'Running macro…' : 'Listening for triggers'}
-              </span>
-              <span className="ml-auto flex items-center gap-2">
-                <span className="hidden sm:flex items-center gap-1.5 bg-surface border border-line px-2 py-0.5 rounded-full font-mono text-[10px] text-ink-2">
-                  <Icon name="shield" size={10} className="text-danger" /> Ctrl+Shift+X
-                </span>
-              </span>
+              <span className="inline-flex items-center gap-1.5 text-ink-2"><span className={`w-2 h-2 rounded-full ${isExecuting ? 'bg-warn animate-pulse' : 'bg-success'}`} />{isExecuting ? 'Running macro…' : 'Listening for triggers'}</span>
+              <span className="hidden md:inline-flex items-center gap-1.5 text-ink-3 ml-3">Ctrl+K palette · Ctrl+Z/Y undo · Shift+click multi-select</span>
+              <span className="ml-auto flex items-center gap-2"><span className="hidden sm:flex items-center gap-1.5 bg-surface border border-line px-2 py-0.5 rounded-full font-mono text-[10px] text-ink-2"><Icon name="shield" size={10} className="text-danger" /> Ctrl+Shift+X</span></span>
             </div>
           </div>
         </div>

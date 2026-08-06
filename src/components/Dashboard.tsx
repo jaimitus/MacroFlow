@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Icon from './Icon';
 import Sparkline from './Sparkline';
 import type { Flow, FlowNode, HookEvent, LogEntry, LogLevel } from '../types';
@@ -28,6 +29,8 @@ export interface DashboardProps {
   onCreateFlow: () => void;
   onDeleteFlow: (id: string) => void;
   onExportFlow: (id: string) => void;
+  onDuplicateFlow?: (id: string) => void;
+  onRenameFlow?: (id: string, name: string, desc?: string) => void;
 }
 
 export default function Dashboard(p: DashboardProps) {
@@ -36,6 +39,21 @@ export default function Dashboard(p: DashboardProps) {
   const latAvg = p.latencyHistory.length
     ? p.latencyHistory.reduce((a, b) => a + b, 0) / p.latencyHistory.length
     : 0.9;
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renameDesc, setRenameDesc] = useState('');
+
+  const startRename = (f: Flow) => {
+    setRenameId(f.id);
+    setRenameName(f.name);
+    setRenameDesc(f.description);
+  };
+  const commitRename = () => {
+    if (renameId) {
+      p.onRenameFlow?.(renameId, renameName, renameDesc);
+      setRenameId(null);
+    }
+  };
 
   return (
     <div className="p-4 md:p-6 space-y-4 rise-in">
@@ -126,7 +144,7 @@ export default function Dashboard(p: DashboardProps) {
                     reader.onload = (evt) => {
                       try {
                         const flow = JSON.parse(evt.target?.result as string) as Flow;
-                        flow.id = `flow-${Date.now()}`; // prevent id collisions
+                        flow.id = `flow-${Date.now()}`;
                         p.onImportFlow(flow);
                       } catch {
                         alert("Invalid .macroflow file!");
@@ -142,59 +160,91 @@ export default function Dashboard(p: DashboardProps) {
           <div className="divide-y divide-line">
             {p.flows.map((f) => {
               const trigger = f.nodes.find((n) => n.category === 'trigger');
+              const isRenaming = renameId === f.id;
               return (
                 <div key={f.id} className="px-4 py-3 flex items-center gap-3 hover:bg-elevated transition-colors">
                   <span className={`w-9 h-9 rounded-lg grid place-items-center shrink-0 ${f.enabled ? 'bg-brand/12 text-brand' : 'bg-ink/5 text-ink-3'}`}>
                     <Icon name={trigger?.icon ?? 'nodes'} size={16} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="text-[12.5px] font-semibold text-ink truncate">{f.name}</div>
-                    <div className="text-[11px] text-ink-3 truncate">{f.description}</div>
+                    {isRenaming ? (
+                      <div className="space-y-1.5">
+                        <input value={renameName} onChange={e=> setRenameName(e.target.value)} onKeyDown={e=> e.key==='Enter' && commitRename()} placeholder="Flow name" className="w-full text-[12.5px] font-semibold border border-brand rounded-md px-2 py-1 bg-surface text-ink outline-none" autoFocus />
+                        <input value={renameDesc} onChange={e=> setRenameDesc(e.target.value)} onKeyDown={e=> e.key==='Enter' && commitRename()} placeholder="Description" className="w-full text-[11px] border border-line rounded-md px-2 py-1 bg-surface text-ink-2 outline-none" />
+                        <div className="flex gap-1.5">
+                          <button onClick={commitRename} className="text-[11px] bg-brand text-white px-2.5 py-1 rounded-md font-semibold">Save</button>
+                          <button onClick={()=> setRenameId(null)} className="text-[11px] bg-elevated border border-line px-2.5 py-1 rounded-md">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-[12.5px] font-semibold text-ink truncate">{f.name}</div>
+                        <div className="text-[11px] text-ink-3 truncate">{f.description}</div>
+                      </>
+                    )}
                   </div>
-                  <span className="hidden sm:inline text-[10.5px] font-mono bg-elevated border border-line text-ink-2 px-2 py-1 rounded-md shrink-0">
-                    {f.nodes.length} nodes
-                  </span>
-                  <button
-                    onClick={() => p.onRun(f.id)}
-                    disabled={p.isExecuting || !f.enabled}
-                    className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-success hover:bg-success/10 transition-colors shrink-0 disabled:opacity-50"
-                    title="Run"
-                  >
-                    <Icon name="play" size={15} />
-                  </button>
-                  <button
-                    onClick={() => p.onExportFlow(f.id)}
-                    className="flex items-center gap-1.5 bg-surface border border-line text-ink-2 px-3 py-1.5 rounded-lg hover:text-brand hover:border-brand/50 hover:bg-brand/5 transition-colors shrink-0 text-[11px] font-bold uppercase tracking-wide"
-                    title="Export .macroflow"
-                  >
-                    <Icon name="upload" size={14} />
-                    EXPORT
-                  </button>
-                  <button
-                    onClick={() => p.onEditFlow(f.id)}
-                    className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-brand hover:bg-brand/10 transition-colors shrink-0"
-                    title="Edit"
-                  >
-                    <Icon name="sliders" size={15} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm(`Are you sure you want to delete "${f.name}"?`)) {
-                        p.onDeleteFlow(f.id);
-                      }
-                    }}
-                    className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-danger hover:bg-danger/10 transition-colors shrink-0"
-                    title="Delete"
-                  >
-                    <Icon name="trash" size={15} />
-                  </button>
-                  <button
-                    onClick={() => p.onToggleFlow(f.id)}
-                    className={`relative w-10 h-[22px] rounded-full transition-colors shrink-0 ${f.enabled ? 'bg-brand' : 'bg-ink/15'}`}
-                    title={f.enabled ? 'Disable' : 'Enable'}
-                  >
-                    <span className={`absolute top-[2px] w-[18px] h-[18px] rounded-full bg-white shadow transition-all ${f.enabled ? 'left-[20px]' : 'left-[2px]'}`} />
-                  </button>
+                  {!isRenaming && (
+                    <>
+                      <span className="hidden sm:inline text-[10.5px] font-mono bg-elevated border border-line text-ink-2 px-2 py-1 rounded-md shrink-0">
+                        {f.nodes.length} nodes
+                      </span>
+                      <button
+                        onClick={() => p.onRun(f.id)}
+                        disabled={p.isExecuting || !f.enabled}
+                        className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-success hover:bg-success/10 transition-colors shrink-0 disabled:opacity-50"
+                        title="Run"
+                      >
+                        <Icon name="play" size={15} />
+                      </button>
+                      <button
+                        onClick={() => p.onDuplicateFlow?.(f.id)}
+                        className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-brand hover:bg-brand/10 transition-colors shrink-0"
+                        title="Duplicate"
+                      >
+                        <Icon name="copy" size={14} />
+                      </button>
+                      <button
+                        onClick={() => startRename(f)}
+                        className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-ink hover:bg-ink/5 transition-colors shrink-0"
+                        title="Rename"
+                      >
+                        <Icon name="type" size={14} />
+                      </button>
+                      <button
+                        onClick={() => p.onExportFlow(f.id)}
+                        className="hidden lg:flex items-center gap-1.5 bg-surface border border-line text-ink-2 px-3 py-1.5 rounded-lg hover:text-brand hover:border-brand/50 hover:bg-brand/5 transition-colors shrink-0 text-[11px] font-bold uppercase tracking-wide"
+                        title="Export .macroflow"
+                      >
+                        <Icon name="upload" size={14} />
+                        EXPORT
+                      </button>
+                      <button
+                        onClick={() => p.onEditFlow(f.id)}
+                        className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-brand hover:bg-brand/10 transition-colors shrink-0"
+                        title="Edit"
+                      >
+                        <Icon name="sliders" size={15} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete "${f.name}"?`)) {
+                            p.onDeleteFlow(f.id);
+                          }
+                        }}
+                        className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-danger hover:bg-danger/10 transition-colors shrink-0"
+                        title="Delete"
+                      >
+                        <Icon name="trash" size={15} />
+                      </button>
+                      <button
+                        onClick={() => p.onToggleFlow(f.id)}
+                        className={`relative w-10 h-[22px] rounded-full transition-colors shrink-0 ${f.enabled ? 'bg-brand' : 'bg-ink/15'}`}
+                        title={f.enabled ? 'Disable' : 'Enable'}
+                      >
+                        <span className={`absolute top-[2px] w-[18px] h-[18px] rounded-full bg-white shadow transition-all ${f.enabled ? 'left-[20px]' : 'left-[2px]'}`} />
+                      </button>
+                    </>
+                  )}
                 </div>
               );
             })}
