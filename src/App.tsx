@@ -86,10 +86,13 @@ const sleep = (ms: number, signal: AbortSignal) =>
       if (settled) return;
       settled = true;
       window.clearTimeout(timeoutId);
-    if (!seen.has(n.id)) order.push(n.id);
+      signal.removeEventListener('abort', finish);
+      resolve();
+    };
+
+    const timeoutId = window.setTimeout(finish, ms);
+    signal.addEventListener('abort', finish, { once: true });
   });
-  return order;
-}
 
 export default function App() {
   const { pref, resolved, setPref, toggle } = useTheme();
