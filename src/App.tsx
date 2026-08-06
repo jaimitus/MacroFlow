@@ -338,11 +338,14 @@ export default function App() {
     [flowId, selectedNodeId, flows, appendLog]
   );
 
-  const runFlow = useCallback(async () => {
+  const runFlow = useCallback(async (overrideFlowId?: string) => {
     // State updates are asynchronous, so `isExecuting` alone cannot prevent
     // two same-tick clicks/native events from starting two runners. The ref is
     // the synchronous execution lock; the state remains the render signal.
     if (executingRef.current) return;
+
+    const targetFlow = overrideFlowId ? flows.find(f => f.id === overrideFlowId) : flow;
+    if (!targetFlow) return;
 
     const ctl = new AbortController();
     executingRef.current = true;
@@ -350,12 +353,12 @@ export default function App() {
     if (mountedRef.current) {
       setIsExecuting(true);
       setCurrentExecNode(null);
-      appendLog('info', `[engine] ▶ running "${flow.name}" · ${flow.nodes.length} nodes`);
+      appendLog('info', `[engine] ▶ running "${targetFlow.name}" · ${targetFlow.nodes.length} nodes`);
     }
 
     try {
-      const triggers = flow.nodes.filter((n) => n.category === 'trigger').map((n) => n.id);
-      const q = triggers.length > 0 ? [...triggers] : flow.nodes.length > 0 ? [flow.nodes[0].id] : [];
+      const triggers = targetFlow.nodes.filter((n) => n.category === 'trigger').map((n) => n.id);
+      const q = triggers.length > 0 ? [...triggers] : targetFlow.nodes.length > 0 ? [targetFlow.nodes[0].id] : [];
       const seen = new Set<string>();
 
       while (q.length > 0) {
@@ -364,7 +367,7 @@ export default function App() {
         if (seen.has(id)) continue;
         seen.add(id);
 
-        const node = flow.nodes.find((n) => n.id === id);
+        const node = targetFlow.nodes.find((n) => n.id === id);
         if (!node) continue;
 
         if (mountedRef.current) {
@@ -386,7 +389,7 @@ export default function App() {
              const branchId = result === 'true' ? node.config.then : node.config.else;
              if (branchId) nextNodes.push(branchId);
           } else {
-             nextNodes = flow.edges.filter((e) => e.from === id).map((e) => e.to);
+             nextNodes = targetFlow.edges.filter((e) => e.from === id).map((e) => e.to);
           }
           q.push(...nextNodes);
         } catch (err: any) {
@@ -415,7 +418,7 @@ export default function App() {
         setIsExecuting(false);
       }
     }
-  }, [flow, appendLog, recordLatency]);
+  }, [flow, flows, appendLog, recordLatency]);
 
   useEffect(() => {
     runFlowRef.current = runFlow;
@@ -428,6 +431,21 @@ export default function App() {
     setFlows((fs) => [...fs, flow]);
     appendLog('ok', `[import] imported flow "${flow.name}"`);
   }, [appendLog]);
+
+  const handleCreateFlow = useCallback(() => {
+    const newFlow: Flow = {
+      id: `flow-${Date.now()}`,
+      name: `New Flow ${flows.length + 1}`,
+      description: 'A new empty flow',
+      enabled: true,
+      nodes: [],
+      edges: []
+    };
+    setFlows(fs => [...fs, newFlow]);
+    setFlowId(newFlow.id);
+    setActiveTab('designer');
+    appendLog('info', `[designer] created "${newFlow.name}"`);
+  }, [flows.length, appendLog]);
 
   return (
     <div className="flex flex-col w-screen h-screen overflow-hidden bg-surface text-ink">
@@ -546,7 +564,7 @@ export default function App() {
                     cpuHistory={cpuHistory}
                     ramHistory={ramHistory}
                     latencyHistory={latencyHistory}
-                    onRun={runFlow}
+                    onRun={(id) => runFlow(id)}
                     onKill={triggerKillSwitch}
                     onToggleFlow={toggleFlow}
                     onEditFlow={(id) => {
@@ -555,6 +573,7 @@ export default function App() {
                       setActiveTab('designer');
                     }}
                     onImportFlow={handleImportFlow}
+                    onCreateFlow={handleCreateFlow}
                   />
                 )}
                 {activeTab === 'designer' && (

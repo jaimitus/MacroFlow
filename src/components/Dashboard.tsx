@@ -20,11 +20,12 @@ export interface DashboardProps {
   cpuHistory: number[];
   ramHistory: number[];
   latencyHistory: number[];
-  onRun: () => void;
+  onRun: (id?: string) => void;
   onKill: (source: string) => void;
   onToggleFlow: (id: string) => void;
   onEditFlow: (id: string) => void;
   onImportFlow: (flow: Flow) => void;
+  onCreateFlow: () => void;
 }
 
 export default function Dashboard(p: DashboardProps) {
@@ -43,7 +44,7 @@ export default function Dashboard(p: DashboardProps) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={p.onRun}
+            onClick={() => p.onRun()}
             disabled={p.isExecuting}
             className="flex items-center gap-1.5 bg-brand hover:bg-brand-strong disabled:opacity-45 text-brand-fg text-[12px] font-semibold px-3.5 py-2 rounded-lg transition-colors"
           >
@@ -100,9 +101,18 @@ export default function Dashboard(p: DashboardProps) {
             <h3 className="text-[13px] font-bold text-ink">Automations</h3>
             <div className="flex items-center gap-3">
               <span className="text-[11px] text-ink-3 hidden sm:inline">{p.flows.filter((f) => f.enabled).length} of {p.flows.length} enabled</span>
+              
+              <button
+                onClick={p.onCreateFlow}
+                className="flex items-center gap-2 bg-success text-white font-black text-[12px] px-4 py-2 rounded-lg hover:bg-success/90 transition-colors shadow-pop uppercase tracking-wide"
+              >
+                <Icon name="plus" size={15} />
+                NEW FLOW
+              </button>
+
               <label className="cursor-pointer flex items-center gap-2 bg-brand text-brand-fg font-black text-[12px] px-4 py-2 rounded-lg hover:bg-brand-strong transition-colors shadow-pop uppercase tracking-wide">
                 <Icon name="download" size={15} />
-                IMPORT FLOW
+                IMPORT
                 <input
                   type="file"
                   accept=".macroflow,.json"
@@ -142,6 +152,14 @@ export default function Dashboard(p: DashboardProps) {
                   <span className="hidden sm:inline text-[10.5px] font-mono bg-elevated border border-line text-ink-2 px-2 py-1 rounded-md shrink-0">
                     {f.nodes.length} nodes
                   </span>
+                  <button
+                    onClick={() => p.onRun(f.id)}
+                    disabled={p.isExecuting || !f.enabled}
+                    className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-success hover:bg-success/10 transition-colors shrink-0 disabled:opacity-50"
+                    title="Run"
+                  >
+                    <Icon name="play" size={15} />
+                  </button>
                   <button
                     onClick={() => {
                       const blob = new Blob([JSON.stringify(f, null, 2)], { type: 'application/json' });
