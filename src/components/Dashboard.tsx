@@ -100,9 +100,9 @@ export default function Dashboard(p: DashboardProps) {
             <h3 className="text-[13px] font-bold text-ink">Automations</h3>
             <div className="flex items-center gap-3">
               <span className="text-[11px] text-ink-3 hidden sm:inline">{p.flows.filter((f) => f.enabled).length} of {p.flows.length} enabled</span>
-              <label className="cursor-pointer flex items-center gap-1.5 text-[11.5px] font-semibold text-brand hover:text-brand-strong transition-colors">
-                <Icon name="download" size={13} />
-                Import
+              <label className="cursor-pointer flex items-center gap-2 bg-brand text-brand-fg font-black text-[12px] px-4 py-2 rounded-lg hover:bg-brand-strong transition-colors shadow-pop uppercase tracking-wide">
+                <Icon name="download" size={15} />
+                IMPORT FLOW
                 <input
                   type="file"
                   accept=".macroflow,.json"
@@ -152,10 +152,11 @@ export default function Dashboard(p: DashboardProps) {
                       a.click();
                       URL.revokeObjectURL(url);
                     }}
-                    className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-brand hover:bg-brand/10 transition-colors shrink-0"
+                    className="flex items-center gap-1.5 bg-surface border border-line text-ink-2 px-3 py-1.5 rounded-lg hover:text-brand hover:border-brand/50 hover:bg-brand/5 transition-colors shrink-0 text-[11px] font-bold uppercase tracking-wide"
                     title="Export .macroflow"
                   >
-                    <Icon name="upload" size={15} />
+                    <Icon name="upload" size={14} />
+                    EXPORT
                   </button>
                   <button
                     onClick={() => p.onEditFlow(f.id)}
