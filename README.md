@@ -7,27 +7,29 @@
 
 **MacroFlow** is a lightweight, tray-based visual automation workspace for Windows. Design flows as nodes, inspect execution activity, test global shortcuts, and stop an in-progress run with a global emergency shortcut.
 
-> **Project status:** MacroFlow v1.5.0 includes a fully native robust execution engine. It acts as a visual automation workspace with real OS-level macros, conditional branching logic, dynamic DAG execution, and Windows-native interactions.
+> **Project status:** MacroFlow v1.5.0 includes a fully native robust execution engine with **Cyclic Loop/Repeat nodes**, **Mouse Wheel horizontal canvas scrolling**, **Audible system sound alerts**, **Native .macroflow file exporting**, and an expanded node palette for desktop automation.
 
 ## Why MacroFlow?
 
-- **Visual by default** — compose triggers and actions on a node canvas instead of maintaining a large script.
-- **Fast and small** — Tauri uses the operating system WebView2 runtime instead of bundling Chromium.
-- **Safety-first** — `Ctrl + Shift + Esc` is available globally on Windows and the UI exposes a prominent stop control.
-- **Tray resident** — minimize the window to the system tray and bring it back from the tray menu.
-- **Low-noise observability** — bounded activity logs, hook events, latency history, and resource charts.
-- **Desktop-friendly UI** — Windows-inspired light/dark/system themes with keyboard and responsive layout support.
+- **Visual by default** — compose triggers, actions, and loops on a node canvas instead of maintaining complex scripts.
+- **Loop Engine** — create repeating automated workflows with iteration counters and dynamic cycle resets.
+- **Fast and small** — Tauri 2 uses the native Windows WebView2 runtime instead of bundling a heavy Chromium instance.
+- **Safety-first** — `Ctrl + Shift + Esc` is available globally on Windows alongside the UI emergency stop.
+- **Tray resident** — minimize the window to the system tray and bring it back seamlessly from the tray menu.
+- **Low-noise observability** — real-time Execution Activity log, hook events, latency history, and resource charts.
+- **Desktop-friendly UI** — Windows 11 Fluent-inspired light/dark themes with fluid canvas navigation and mouse wheel scrolling.
 
 ## Current capabilities
 
 | Area | Included today |
 | --- | --- |
-| Flow designer | Drag nodes, edit node configuration, connect/delete links, select flows |
-| Node palette | Hotkeys, window focus, clipboard, keystrokes, mouse move/click, screenshot, PowerShell, delay, condition, notification, app launch/close, open URL, clipboard set |
-| Execution | Real dynamic DAG runner that follows logical condition branches and triggers native Rust/PowerShell system interops. |
+| Flow designer | Drag nodes, mouse-wheel horizontal canvas scrolling, edit node configuration, connect/delete links, select flows |
+| Node palette | Hotkeys, window focus, clipboard (get/set), keystrokes, mouse move/click, screenshot, PowerShell, delay, condition, notification, app launch/close, open URL, HTTP request, file write, play sound, web search, repeat loops |
+| Execution engine | Dynamic DAG & Loop runner that handles cyclic iterations, logical condition branches, and native Rust/PowerShell system interops |
+| Export / Import | Native `.macroflow` JSON file export to `Documents` and import directly into the dashboard |
 | Safety | Global `Ctrl + Shift + Esc` shortcut, tray kill action, UI emergency stop |
 | Desktop shell | Tauri 2 window controls, tray menu, minimize-to-tray close action |
-| Diagnostics | Bounded logs/hooks/history, hook-latency sparkline, resource heartbeat |
+| Diagnostics | Bounded activity logs, hook events, latency sparkline, resource heartbeat |
 | Appearance | Light, dark, and system theme preference |
 
 ## Dynamic Variables
