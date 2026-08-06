@@ -130,15 +130,11 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
         }
         "send_keys" => {
             let keys = config.get("keys").cloned().unwrap_or_default();
-            // Format keys for System.Windows.Forms.SendKeys
-            // Replace {ENTER} with {ENTER}, {TAB} with {TAB}, etc.
-            let ps_keys = keys
-                .replace("'", "''");
-            
+            // WScript.Shell SendKeys works from background COM scripts without requiring a GUI message loop.
             let script = format!(
-                "Add-Type -AssemblyName System.Windows.Forms; \
-                [System.Windows.Forms.SendKeys]::SendWait('{}')",
-                ps_keys
+                "$wshell = New-Object -ComObject WScript.Shell; \
+                $wshell.SendKeys('{}')",
+                keys.replace("'", "''")
             );
             let _ = std::process::Command::new("powershell")
                 .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
@@ -157,7 +153,12 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
         }
         "focus_window" => {
             let title = config.get("title").cloned().unwrap_or_default();
-            let script = format!("(New-Object -ComObject WScript.Shell).AppActivate('{}')", title.replace("'", "''"));
+            let script = format!(
+                "$wshell = New-Object -ComObject WScript.Shell; \
+                $wshell.AppActivate('{}'); \
+                Start-Sleep -Milliseconds 250",
+                title.replace("'", "''")
+            );
             let _ = std::process::Command::new("powershell")
                 .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
                 .creation_flags(CREATE_NO_WINDOW)
