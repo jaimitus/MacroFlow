@@ -9,6 +9,9 @@ use tauri::{
 use tauri_plugin_global_shortcut::{Builder as ShortcutBuilder, ShortcutState};
 use std::sync::Mutex;
 use sysinfo::System;
+use std::os::windows::process::CommandExt;
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 struct AppState {
     sys: Mutex<System>,
@@ -84,24 +87,24 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
         }
         "send_keys" => {
             let keys = config.get("keys").cloned().unwrap_or_default();
-            let keys = keys.replace("\"", "\"\"").replace("{CLIPBOARD}", "^v");
-            let script = format!("CreateObject(\"WScript.Shell\").SendKeys \"{}\"", keys);
+            let script = format!(
+                "(New-Object -ComObject WScript.Shell).SendKeys('{}')",
+                keys.replace("'", "''").replace("{CLIPBOARD}", "^v")
+            );
             
-            let temp_path = std::env::temp_dir().join("macroflow_keys.vbs");
-            let _ = std::fs::write(&temp_path, script);
-            
-            let _ = std::process::Command::new("wscript")
-                .args(&[temp_path.to_str().unwrap()])
+            let _ = std::process::Command::new("powershell")
+                .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
+                .creation_flags(CREATE_NO_WINDOW)
                 .status();
                 
-            let _ = std::fs::remove_file(temp_path);
             Ok("Keys sent".to_string())
         }
         "clipboard_set" => {
             let value = config.get("value").cloned().unwrap_or_default();
             let script = format!("Set-Clipboard -Value '{}'", value.replace("'", "''"));
             let _ = std::process::Command::new("powershell")
-                .args(&["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &script])
+                .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
+                .creation_flags(CREATE_NO_WINDOW)
                 .status();
             Ok("Clipboard updated".to_string())
         }
