@@ -7,7 +7,7 @@
 
 **MacroFlow** is a lightweight, tray-based visual automation workspace for Windows. Design flows as nodes, inspect execution activity, test global shortcuts, and stop an in-progress run with a global emergency shortcut.
 
-> **Project status:** MacroFlow is an active early-stage project. The current repository includes the complete desktop UI, flow designer, Tauri tray integration, global kill-switch plumbing, and a safe execution simulator. Native input/action execution, durable flow storage, and some Windows settings integrations are still being connected.
+> **Project status:** MacroFlow v1.4.2 includes a fully native robust execution engine. It acts as a visual automation workspace with real OS-level macros, conditional branching logic, dynamic DAG execution, and Windows-native interactions.
 
 ## Why MacroFlow?
 
@@ -23,8 +23,8 @@
 | Area | Included today |
 | --- | --- |
 | Flow designer | Drag nodes, edit node configuration, connect/delete links, select flows |
-| Node palette | Hotkeys, window focus, schedule, startup, clipboard, keystrokes, mouse, PowerShell, delay, condition, notification, app launch, clipboard |
-| Execution | Cooperative simulated runner with abortable delays and an execution lock |
+| Node palette | Hotkeys, window focus, clipboard, keystrokes, mouse move/click, screenshot, PowerShell, delay, condition, notification, app launch/close, open URL, clipboard set |
+| Execution | Real dynamic DAG runner that follows logical condition branches and triggers native Rust/PowerShell system interops. |
 | Safety | Global `Ctrl + Shift + Esc` shortcut, tray kill action, UI emergency stop |
 | Desktop shell | Tauri 2 window controls, tray menu, minimize-to-tray close action |
 | Diagnostics | Bounded logs/hooks/history, hook-latency sparkline, resource heartbeat |
@@ -32,7 +32,7 @@
 
 ### Important scope note
 
-The browser build is useful for reviewing and designing the interface, but it does not control the mouse, keyboard, clipboard, windows, or PowerShell. The Rust side currently provides the Tauri shell, tray, and global shortcut event bridge. The node runner in `src/App.tsx` intentionally simulates action durations until the native execution engine is connected.
+MacroFlow's execution engine interacts deeply with the Windows OS. While the React frontend provides a beautiful layout, all heavy lifting (such as PowerShell injection, C# interoperability for mouse events, and hardware metrics) happens safely and asynchronously through the Rust backend.
 
 ## Architecture
 
