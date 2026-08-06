@@ -18,25 +18,72 @@ export function isTauri(): boolean {
 /**
  * Subscribes to native events emitted by the Rust side (global shortcut + tray).
  * Returns a disposer; safe to call in the browser (it just no-ops).
+ *
+ * The listener registration is asynchronous. The `disposed` guard is important:
+ * React can unmount an effect before the dynamic import/listen calls finish.
+ * Without it, a late subscription would survive the effect cleanup forever.
  */
 export async function bindTauriEvents(handlers: TauriHandlers): Promise<() => void> {
   if (!isTauri()) return () => {};
+
+  let disposed = false;
+  const disposers: Array<() => void> = [];
+
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    disposers.splice(0).forEach((remove) => remove());
+  };
+
   try {
     const { listen } = await import('@tauri-apps/api/event');
-    const disposers: Array<() => void> = [];
+    const subscribe = async <T>(event: string, callback: (payload: T) => void) => {
+      const remove = await listen<T>(event, (e) => callback(e.payload));
+      if (disposed) {
+        remove();
+      } else {
+        disposers.push(remove);
+      }
+    };
 
+    const subscriptions: Promise<void>[] = [];
     if (handlers.onKillSwitch) {
-      disposers.push(
-        await listen<string>('kill-switch', (e) => handlers.onKillSwitch!(e.payload || 'global'))
+      subscriptions.push(
+        subscribe<string>('kill-switch', (source) => handlers.onKillSwitch?.(source || 'global'))
       );
     }
     if (handlers.onRunFlow) {
-      disposers.push(await listen('run-flow', () => handlers.onRunFlow!()));
+      subscriptions.push(subscribe('run-flow', () => handlers.onRunFlow?.()));
     }
-
-    return () => disposers.forEach((d) => d());
+    await Promise.all(subscriptions);
   } catch {
-    return () => {};
+    // If one subscription fails, remove every subscription that succeeded
+    // before the failure. The bridge is optional in browser/demo mode.
+    dispose();
+  }
+
+  return dispose;
+}
+
+export async function minimizeWindow(): Promise<void> {
+  if (!isTauri()) return;
+  const { getCurrentWindow } = await import('@tauri-apps/api/window');
+  await getCurrentWindow().minimize();
+}
+
+export async function toggleMaximizeWindow(): Promise<void> {
+  if (!isTauri()) return;
+  const { getCurrentWindow } = await import('@tauri-apps/api/window');
+  await getCurrentWindow().toggleMaximize();
+}
+
+export async function closeWindow(minimizeToTray: boolean): Promise<void> {
+  if (!isTauri()) return;
+  const current = (await import('@tauri-apps/api/window')).getCurrentWindow();
+  if (minimizeToTray) {
+    await current.hide();
+  } else {
+    await current.close();
   }
 }
 

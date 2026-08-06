@@ -12,8 +12,12 @@ function getSystemTheme(): ResolvedTheme {
 
 function readStored(): ThemePref {
   if (typeof localStorage === 'undefined') return 'system';
-  const v = localStorage.getItem(STORAGE_KEY);
-  return v === 'light' || v === 'dark' || v === 'system' ? v : 'system';
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    return v === 'light' || v === 'dark' || v === 'system' ? v : 'system';
+  } catch {
+    return 'system';
+  }
 }
 
 function apply(resolved: ResolvedTheme) {
@@ -36,7 +40,11 @@ export function useTheme() {
     const next = pref === 'system' ? getSystemTheme() : pref;
     setResolved(next);
     apply(next);
-    if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY, pref);
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY, pref);
+    } catch {
+      // Persisting a preference is best-effort and must not break the UI.
+    }
   }, [pref]);
 
   useEffect(() => {

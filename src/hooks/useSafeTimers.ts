@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 /**
  * Leak-safe timer manager.
@@ -59,5 +59,11 @@ export function useSafeTimers() {
 
   const isMounted = useCallback(() => mounted.current, []);
 
-  return { setTimeout, setInterval, clearTimeout, clearInterval, isMounted };
+  // Keep the controller object stable. Consumers commonly place it in an
+  // effect dependency list; returning a new object on every render would
+  // recreate intervals and listeners unnecessarily on every state update.
+  return useMemo(
+    () => ({ setTimeout, setInterval, clearTimeout, clearInterval, isMounted }),
+    [setTimeout, setInterval, clearTimeout, clearInterval, isMounted]
+  );
 }

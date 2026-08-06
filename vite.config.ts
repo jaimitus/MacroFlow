@@ -16,4 +16,15 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  // Arena and other reverse proxies use a generated hostname. Keep the
+  // development preview reachable through that proxy while production builds
+  // remain unaffected.
+  server: {
+    host: "0.0.0.0",
+    allowedHosts: true,
+  },
+  preview: {
+    host: "0.0.0.0",
+    allowedHosts: true,
+  },
 });

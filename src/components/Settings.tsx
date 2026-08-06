@@ -103,7 +103,7 @@ export default function Settings({ themePref, onThemeChange, settings, onSetting
           </div>
           <div className="ml-auto flex gap-2">
             <a
-              href="https://github.com"
+              href="https://github.com/jaimitus/MacroFlow"
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1.5 text-[11.5px] font-semibold bg-elevated border border-line text-ink px-3 py-1.5 rounded-lg hover:border-brand/40 transition-colors"
