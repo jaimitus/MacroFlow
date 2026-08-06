@@ -286,7 +286,9 @@ export default function App() {
                     ? { exe: 'notepad' }
                     : kind === 'open_app'
                       ? { exe: 'notepad.exe' }
-                      : kind === 'mouse_click'
+                      : kind === 'focus_window'
+                        ? { title: 'Calculator' }
+                        : kind === 'mouse_click'
                         ? { button: 'left' }
                         : kind === 'mouse_move'
                           ? { x: '500', y: '500' }

@@ -17,6 +17,7 @@ export const PALETTE: PaletteItem[] = [
   { kind: 'condition', label: 'Condition', cat: 'action', icon: 'branch', color: '#D83B01', desc: 'if / else' },
   { kind: 'notification', label: 'Notification', cat: 'action', icon: 'bell', color: '#107C10', desc: 'toast' },
   { kind: 'open_app', label: 'Launch App', cat: 'action', icon: 'send', color: '#8764B8', desc: 'open program' },
+  { kind: 'focus_window', label: 'Focus Window', cat: 'action', icon: 'eye', color: '#8764B8', desc: 'bring to front' },
   { kind: 'clipboard_set', label: 'Set Clipboard', cat: 'action', icon: 'clipboard', color: '#8764B8', desc: 'write text' },
 ];
 
@@ -58,7 +59,8 @@ export const DEFAULT_FLOWS: Flow[] = [
       { id: 'a2', kind: 'condition', category: 'action', label: 'Clipboard has text?', x: 480, y: 150, config: { expr: 'len({CLIPBOARD}) > 0', then: 'a3', else: 'a5' }, color: '#D83B01', icon: 'branch' },
       { id: 'a3', kind: 'open_app', category: 'action', label: 'Open Calc (THEN)', x: 740, y: 40, config: { exe: 'calc.exe' }, color: '#8764B8', icon: 'send' },
       { id: 'a3_delay', kind: 'delay', category: 'action', label: 'Wait for Calc', x: 960, y: 40, config: { ms: '1000' }, color: '#5C6370', icon: 'timer' },
-      { id: 'a4', kind: 'send_keys', category: 'action', label: 'Type math', x: 1180, y: 40, config: { keys: '500*2={ENTER}' }, color: '#4A5568', icon: 'type' },
+      { id: 'a3_focus', kind: 'focus_window', category: 'action', label: 'Focus Calc', x: 1180, y: 40, config: { title: 'Calculator' }, color: '#8764B8', icon: 'eye' },
+      { id: 'a4', kind: 'send_keys', category: 'action', label: 'Type math', x: 1400, y: 40, config: { keys: '500*2={ENTER}' }, color: '#4A5568', icon: 'type' },
       { id: 'a5', kind: 'notification', category: 'action', label: 'Notify (ELSE)', x: 740, y: 220, config: { title: 'Empty', body: 'Clipboard was empty' }, color: '#107C10', icon: 'bell' },
     ],
     edges: [
@@ -66,7 +68,8 @@ export const DEFAULT_FLOWS: Flow[] = [
       { from: 'a1', to: 'a2' },
       { from: 'a2', to: 'a3' },
       { from: 'a3', to: 'a3_delay' },
-      { from: 'a3_delay', to: 'a4' },
+      { from: 'a3_delay', to: 'a3_focus' },
+      { from: 'a3_focus', to: 'a4' },
       { from: 'a2', to: 'a5' },
     ],
   },

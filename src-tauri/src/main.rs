@@ -143,6 +143,15 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
                 .status();
             Ok("Clipboard updated".to_string())
         }
+        "focus_window" => {
+            let title = config.get("title").cloned().unwrap_or_default();
+            let script = format!("(New-Object -ComObject WScript.Shell).AppActivate('{}')", title.replace("'", "''"));
+            let _ = std::process::Command::new("powershell")
+                .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
+                .creation_flags(CREATE_NO_WINDOW)
+                .status();
+            Ok("Window focused".to_string())
+        }
         "open_app" => {
             let app = config.get("exe").cloned().unwrap_or_default();
             let _ = std::process::Command::new("cmd")

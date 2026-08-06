@@ -11,6 +11,7 @@ export type ActionKind =
   | 'condition'
   | 'notification'
   | 'open_app'
+  | 'focus_window'
   | 'clipboard_set';
 export type NodeKind = TriggerKind | ActionKind;
 
