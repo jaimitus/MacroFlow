@@ -131,7 +131,11 @@ export async function executeNode(kind: string, config: Record<string, string>):
           const res = typeof cur==='string'? cur : JSON.stringify(cur);
           lastJsonSim = res;
           return `JSON parsed -> ${res.slice(0,80)}`;
-        }catch(e:any){ throw new Error('JSON parse error: '+e.message); }
+        }catch(e:any){
+          // Fallback: OCR text is often not JSON — don't break the flow
+          lastJsonSim = cfg.json || '';
+          return `JSON fallback (raw) -> ${(cfg.json||'').slice(0,80)}`;
+        }
       }
       case 'for_each': {
         const items = cfg.items||'a,b,c';

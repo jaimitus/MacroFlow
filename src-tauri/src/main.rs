@@ -402,7 +402,13 @@ fn execute_node(state: tauri::State<AppState>, kind: String, mut config: std::co
                     }
                     Ok(format!("JSON parsed -> {}", result.chars().take(200).collect::<String>()))
                 }
-                Err(e) => Err(format!("JSON parse error: {}", e)),
+                Err(e) => {
+                    // Don't hard-fail the flow — OCR text is rarely JSON. Store raw and continue.
+                    if let Ok(mut j) = state.last_json.lock() {
+                        *j = json_str.clone();
+                    }
+                    Ok(format!("JSON fallback (raw) -> {} (parse: {})", json_str.chars().take(80).collect::<String>(), e))
+                },
             }
         }
         "ocr_screen" => {

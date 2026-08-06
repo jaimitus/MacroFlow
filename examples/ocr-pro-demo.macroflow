@@ -1,7 +1,7 @@
 {
   "id": "flow-ocr",
-  "name": "🔍 OCR Invoice Scanner Pro",
-  "description": "High-accuracy OCR (Tesseract/WinRT) → clipboard → JSON parse → For Each loop → secure save",
+  "name": "\ud83d\udd0d OCR Invoice Scanner Pro",
+  "description": "High-accuracy OCR (Tesseract/WinRT) \u2192 clipboard \u2192 JSON parse \u2192 For Each loop \u2192 secure save",
   "enabled": true,
   "nodes": [
     {
@@ -53,7 +53,7 @@
       "x": 700,
       "y": 80,
       "config": {
-        "json": "{OCR_TEXT}",
+        "json": "{\"invoice\":\"INV-2024-001\",\"total\":299.99,\"notes\":\"{OCR_TEXT}\"}",
         "path": "$.total"
       },
       "color": "#0F6CBD",

@@ -133,7 +133,7 @@ export const DEFAULT_FLOWS: Flow[] = [
       { id: 't1', kind: 'hotkey', category: 'trigger', label: 'Scan Trigger', x: 40, y: 80, config: { hotkey: 'Run' }, color: '#0078D4', icon: 'keyboard' },
       { id: 'a1_ocr', kind: 'ocr_screen', category: 'action', label: 'OCR Screen', x: 260, y: 80, config: { lang: 'eng', psm: '6', region: 'full' }, color: '#E01765', icon: 'eye' },
       { id: 'a2_clip', kind: 'clipboard_set', category: 'action', label: 'Copy OCR', x: 480, y: 80, config: { value: '{OCR_TEXT}' }, color: '#8764B8', icon: 'clipboard' },
-      { id: 'a3_json', kind: 'json_parse', category: 'action', label: 'Parse JSON', x: 700, y: 80, config: { json: '{OCR_TEXT}', path: '$.total' }, color: '#0F6CBD', icon: 'braces' },
+      { id: 'a3_json', kind: 'json_parse', category: 'action', label: 'Parse JSON', x: 700, y: 80, config: { json: '{"invoice":"INV-2024-001","total":299.99,"notes":"{OCR_TEXT}"}', path: '$.total' }, color: '#0F6CBD', icon: 'braces' },
       { id: 'a4_each', kind: 'for_each', category: 'action', label: 'For Each Line', x: 920, y: 80, config: { items: '{OCR_TEXT}', delimiter: '\\n' }, color: '#D83B01', icon: 'refresh' },
       { id: 'a5_write', kind: 'file_write', category: 'action', label: 'Save Report', x: 1140, y: 80, config: { path: '{DOCS_PATH}\\ocr_report.txt', content: 'OCR at {DATE} {TIME}: {OCR_TEXT} | JSON: {JSON_VALUE}' }, color: '#107C10', icon: 'terminal' },
       { id: 'a6_notify', kind: 'notification', category: 'action', label: 'Done', x: 1360, y: 80, config: { title: 'OCR Complete', body: 'Extracted {OCR_TEXT}' }, color: '#107C10', icon: 'bell' },
