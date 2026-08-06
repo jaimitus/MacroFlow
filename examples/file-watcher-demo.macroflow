@@ -1,0 +1,116 @@
+{
+  "id": "flow-watcher",
+  "name": "📁 File Watcher — Auto OCR on New File",
+  "description": "Watches Documents\\watch.txt → on change runs OCR → saves report — perfect for hot folders",
+  "enabled": true,
+  "nodes": [
+    {
+      "id": "t1",
+      "kind": "file_watcher",
+      "category": "trigger",
+      "label": "Watch File",
+      "x": 40,
+      "y": 100,
+      "config": {
+        "path": "{DOCS_PATH}\\watch.txt",
+        "interval": "1000"
+      },
+      "color": "#0078D4",
+      "icon": "file"
+    },
+    {
+      "id": "a1_ocr",
+      "kind": "ocr_screen",
+      "category": "action",
+      "label": "OCR Screen",
+      "x": 260,
+      "y": 100,
+      "config": {
+        "lang": "spa",
+        "psm": "6",
+        "region": "full"
+      },
+      "color": "#E01765",
+      "icon": "eye"
+    },
+    {
+      "id": "a2_cond",
+      "kind": "condition",
+      "category": "action",
+      "label": "Has Text?",
+      "x": 480,
+      "y": 100,
+      "config": {
+        "expr": "len({OCR_TEXT}) > 0",
+        "then": "a3_notify",
+        "else": "a3_empty"
+      },
+      "color": "#D83B01",
+      "icon": "branch"
+    },
+    {
+      "id": "a3_notify",
+      "kind": "notification",
+      "category": "action",
+      "label": "Notify OCR",
+      "x": 740,
+      "y": 40,
+      "config": {
+        "title": "Watcher: New Text",
+        "body": "{OCR_TEXT}"
+      },
+      "color": "#107C10",
+      "icon": "bell"
+    },
+    {
+      "id": "a4_save",
+      "kind": "file_write",
+      "category": "action",
+      "label": "Append Log",
+      "x": 960,
+      "y": 40,
+      "config": {
+        "path": "{DOCS_PATH}\\watcher_log.txt",
+        "content": "[{DATE} {TIME}] Watcher OCR: {OCR_TEXT}"
+      },
+      "color": "#107C10",
+      "icon": "terminal"
+    },
+    {
+      "id": "a3_empty",
+      "kind": "notification",
+      "category": "action",
+      "label": "Empty",
+      "x": 740,
+      "y": 180,
+      "config": {
+        "title": "Watcher Empty",
+        "body": "File changed but OCR empty"
+      },
+      "color": "#D13438",
+      "icon": "bell"
+    }
+  ],
+  "edges": [
+    {
+      "from": "t1",
+      "to": "a1_ocr"
+    },
+    {
+      "from": "a1_ocr",
+      "to": "a2_cond"
+    },
+    {
+      "from": "a2_cond",
+      "to": "a3_notify"
+    },
+    {
+      "from": "a3_notify",
+      "to": "a4_save"
+    },
+    {
+      "from": "a2_cond",
+      "to": "a3_empty"
+    }
+  ]
+}

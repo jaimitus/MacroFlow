@@ -49,7 +49,7 @@
       },
       "allowDowngrades": true
     },
-    "resources": [],
+    "resources": ["../examples", "../docs/OCR_GUIDE.md"],
     "copyright": "© 2026 MacroFlow",
     "category": "Productivity",
     "shortDescription": "Lightweight visual automation launcher for Windows",

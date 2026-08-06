@@ -63,13 +63,20 @@ function readStoredFlows(): Flow[] {
   try {
     const stored = JSON.parse(localStorage.getItem(FLOWS_STORAGE_KEY) ?? 'null') as Flow[] | null;
     if (!stored || !Array.isArray(stored) || stored.length === 0) return DEFAULT_FLOWS;
-    // Migration: ensure matrix demo exists without wiping user flows
-    const hasMatrix = stored.some(f => f.id === 'flow-matrix');
-    if (!hasMatrix) {
-      const matrix = DEFAULT_FLOWS.find(f=>f.id==='flow-matrix');
-      if (matrix) return [matrix!, ...stored];
+    // Merge new default example flows for existing users without wiping their custom flows
+    const merged = [...stored];
+    let changed = false;
+    for (const df of DEFAULT_FLOWS) {
+      if (!merged.some(f => f.id === df.id)) {
+        merged.push(df);
+        changed = true;
+      }
     }
-    return stored;
+    // keep merged for next save (will be persisted via useEffect)
+    if (changed) {
+      try { localStorage.setItem(FLOWS_STORAGE_KEY, JSON.stringify(merged)); } catch {}
+    }
+    return merged;
   } catch {
     return DEFAULT_FLOWS;
   }

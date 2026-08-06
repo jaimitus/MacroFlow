@@ -1,0 +1,115 @@
+{
+  "id": "flow-json",
+  "name": "🔄 JSON & For Each — Process API Data",
+  "description": "HTTP GET → JSON Parse $.data → For Each item → save + notify — template for APIs",
+  "enabled": true,
+  "nodes": [
+    {
+      "id": "t1",
+      "kind": "hotkey",
+      "category": "trigger",
+      "label": "Fetch Data",
+      "x": 40,
+      "y": 100,
+      "config": {
+        "hotkey": "Run"
+      },
+      "color": "#0078D4",
+      "icon": "keyboard"
+    },
+    {
+      "id": "a1_http",
+      "kind": "http_request",
+      "category": "action",
+      "label": "GET API",
+      "x": 260,
+      "y": 100,
+      "config": {
+        "url": "https://api.example.com/data",
+        "method": "GET",
+        "headers": "",
+        "body": ""
+      },
+      "color": "#0F6CBD",
+      "icon": "globe"
+    },
+    {
+      "id": "a2_json",
+      "kind": "json_parse",
+      "category": "action",
+      "label": "Parse JSON",
+      "x": 480,
+      "y": 100,
+      "config": {
+        "json": "{\"data\":[\"a\",\"b\",\"c\"], \"total\":3}",
+        "path": "$.data"
+      },
+      "color": "#0F6CBD",
+      "icon": "braces"
+    },
+    {
+      "id": "a3_each",
+      "kind": "for_each",
+      "category": "action",
+      "label": "For Each",
+      "x": 700,
+      "y": 100,
+      "config": {
+        "items": "{JSON_VALUE}",
+        "delimiter": ","
+      },
+      "color": "#D83B01",
+      "icon": "refresh"
+    },
+    {
+      "id": "a4_write",
+      "kind": "file_write",
+      "category": "action",
+      "label": "Save Item",
+      "x": 920,
+      "y": 100,
+      "config": {
+        "path": "{DOCS_PATH}\\json_items.txt",
+        "content": "Item: {JSON_VALUE} at {TIME}"
+      },
+      "color": "#107C10",
+      "icon": "terminal"
+    },
+    {
+      "id": "a5_notify",
+      "kind": "notification",
+      "category": "action",
+      "label": "Done",
+      "x": 1140,
+      "y": 100,
+      "config": {
+        "title": "JSON Done",
+        "body": "Processed {JSON_VALUE}"
+      },
+      "color": "#107C10",
+      "icon": "bell"
+    }
+  ],
+  "edges": [
+    {
+      "from": "t1",
+      "to": "a1_http"
+    },
+    {
+      "from": "a1_http",
+      "to": "a2_json"
+    },
+    {
+      "from": "a2_json",
+      "to": "a3_each"
+    },
+    {
+      "from": "a3_each",
+      "to": "a4_write"
+    },
+    {
+      "from": "a4_write",
+      "to": "a5_notify"
+    }
+  ]
+}

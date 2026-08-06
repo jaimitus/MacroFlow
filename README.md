@@ -7,7 +7,7 @@
 
 **MacroFlow** is a lightweight, tray-based visual automation workspace for Windows. Design flows as nodes, inspect execution activity, test global shortcuts, and stop an in-progress run with a global emergency shortcut.
 
-> **Project status:** MacroFlow v1.6.0 includes a fully native robust execution engine with **Cyclic Loop/Repeat nodes**, **Designer Quick Wins (Undo/Redo Ctrl+Z/Y, Zoom/Pan/Minimap, Multi-select, Snap Grid 20px, Auto-layout, Fit view, Validation, Command Palette Ctrl+K, Favorites/Recientes, Collapsible palette por grupos, Flow Duplicate/Rename)**, **Mouse Wheel horizontal canvas scrolling**, **Audible system sound alerts**, **Native .macroflow file exporting**, and an expanded node palette for desktop automation.
+> **Project status:** MacroFlow v1.6.0 includes **8 new pro nodes (OCR Screen high-accuracy Tesseract/WinRT, File Watcher, At Time cron, Find Image, For Each, JSON Parse, Lock PC, Volume)**, **Cyclic Loop/Repeat**, **Designer Quick Wins (Undo/Redo, Zoom/Pan/Minimap, Multi-select, Snap Grid, Auto-layout, Validation, Command Palette, Collapsible palette)** and **7 example flows included by default** to learn by example.
 
 ## Why MacroFlow?
 
@@ -24,8 +24,9 @@
 | Area | Included today |
 | --- | --- |
 | Flow designer | Drag nodes, mouse-wheel horizontal canvas scrolling, edit node configuration, connect/delete links, select flows |
-| Node palette | Hotkeys, window focus, clipboard (get/set), keystrokes, mouse move/click, screenshot, PowerShell, delay, condition, notification, app launch/close, open URL, HTTP request, file write, play sound, web search, repeat loops |
-| Execution engine | Dynamic DAG & Loop runner that handles cyclic iterations, logical condition branches, and native Rust/PowerShell system interops |
+| Node palette | 31 nodes: Triggers (Hotkey, Window Focus, Schedule, At Time, File Watcher, Startup, Clipboard) · Input (Send Keys, Mouse) · System (Launch/Close, Focus, URL, Screenshot, Lock PC, Volume) · Vision (OCR Screen, Find Image) · Flow (Delay, Condition, Repeat, For Each) · Notification · Data (Clipboard, HTTP with headers/body, File Write, Web Search, PowerShell, JSON Parse) |
+| Execution engine | Dynamic DAG & Loop runner with Repeat/For Each, condition branches, HTTP headers/body, JSONPath, and native Rust/PowerShell + Tesseract/WinRT OCR |
+| Example flows | 7 flows included by default (Matrix Patrol, Web Search, CMD, OCR Pro, OCR Quick Demo, File Watcher, JSON & For Each) — also in `examples/*.macroflow` for import |
 | Export / Import | Native `.macroflow` JSON file export to `Documents` and import directly into the dashboard |
 | Safety | Global `Ctrl + Shift + Esc` shortcut, tray kill action, UI emergency stop |
 | Desktop shell | Tauri 2 window controls, tray menu, minimize-to-tray close action |
@@ -41,10 +42,14 @@ MacroFlow supports evaluating dynamic text inside any node (e.g. PowerShell scri
 - `{USER}` - Resolves to the active Windows username.
 - `{DOCS_PATH}` - Resolves to the absolute path of your Windows Documents folder.
 - `{CLIPBOARD}` - Injects the current textual content of the clipboard (this is bypassed in "Send Keys" nodes where `^v` is used natively for speed and formatting safety).
+- `{OCR_TEXT}` - Last result from **OCR Screen** node (high-accuracy, stored after each OCR run).
+- `{JSON_VALUE}` - Last result from **JSON Parse** node (value at `$.path`).
 
 You can use these dynamically in nodes like the `Condition` node. For example, a condition expression `len({CLIPBOARD}) > 0` will evaluate to `true` only if you have copied some text, letting you branch your DAG conditionally based on system state!
 
 ## Sharing Automations (.macroflow)
+
+MacroFlow ships with **7 example flows by default** (Matrix Patrol, Web Search, CMD, **OCR Pro**, **OCR Quick Demo**, **File Watcher**, **JSON & For Each**) so you can learn by example. They are also in `examples/*.macroflow` and `docs/OCR_GUIDE.md`.
 
 You can share your creations with the community! Every automation in the Dashboard has a prominent **EXPORT** button that saves a `.macroflow` JSON file to your disk. You can send this file to a friend or colleague, and they can load it directly into their workspace using the **IMPORT FLOW** button on the Dashboard.
 

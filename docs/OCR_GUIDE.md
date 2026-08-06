@@ -23,13 +23,11 @@ Result is stored in **`{OCR_TEXT}`** (and copied to clipboard) for the next node
 ```
 
 **Steps for users:**
-1. Open `examples/sample-invoice.png` fullscreen (or any PDF/invoice/chat window)
+1. Open any PDF, invoice, or chat window with text
 2. Go to **Designer → Vision → OCR Screen** (or import `examples/ocr-quick-demo.macroflow` via Dashboard → Import)
 3. Set `lang: eng` (or `spa` for Spanish invoices) and `psm: 6` (single uniform block — best for documents). `region: full` = whole screen.
 4. Press **Run** (or assign `Global Hotkey`)
 5. You’ll get a toast with the extracted text and a file at `Documents\ocr_quick.txt` with `[DATE TIME] OCR: ...`
-
-> **Try it now:** double-click `examples/sample-invoice.png` to open it, then run the Quick Demo flow. You should see `INV-2024-001` and `TOTAL $299.99` in the notification.
 
 **Tip:** For invoices, set `lang: spa+eng` and `psm: 6`. For single lines, use `psm: 7`.
 
