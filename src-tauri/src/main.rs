@@ -32,8 +32,8 @@ fn send_keys_str(enigo: &mut Enigo, keys: &str) {
             in_bracket = true;
         } else if c == '}' && in_bracket {
             match bracket_content.as_str() {
-                "ENTER" => enigo.key_click(Key::Return),
-                "TAB" => enigo.key_click(Key::Tab),
+                "ENTER" => { enigo.key_click(Key::Return); std::thread::sleep(std::time::Duration::from_millis(20)); },
+                "TAB" => { enigo.key_click(Key::Tab); std::thread::sleep(std::time::Duration::from_millis(20)); },
                 "SPACE" => enigo.key_click(Key::Space),
                 "BACKSPACE" => enigo.key_click(Key::Backspace),
                 "ESC" => enigo.key_click(Key::Escape),

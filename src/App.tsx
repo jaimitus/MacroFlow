@@ -55,6 +55,19 @@ function readStoredSettings(): AppSettings {
   }
 }
 
+const FLOWS_STORAGE_KEY = 'macroflow.flows';
+
+function readStoredFlows(): Flow[] {
+  if (typeof localStorage === 'undefined') return DEFAULT_FLOWS;
+  try {
+    const stored = JSON.parse(localStorage.getItem(FLOWS_STORAGE_KEY) ?? 'null') as Flow[] | null;
+    if (!stored || !Array.isArray(stored) || stored.length === 0) return DEFAULT_FLOWS;
+    return stored;
+  } catch {
+    return DEFAULT_FLOWS;
+  }
+}
+
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
     if (signal.aborted) {
@@ -103,7 +116,7 @@ export default function App() {
   const timers = useSafeTimers();
 
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
-  const [flows, setFlows] = useState<Flow[]>(DEFAULT_FLOWS);
+  const [flows, setFlows] = useState<Flow[]>(() => readStoredFlows());
   const [flowId, setFlowId] = useState('flow-1');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings>(() => readStoredSettings());
@@ -115,6 +128,12 @@ export default function App() {
       // Storage is optional (for example in a locked-down WebView).
     }
   }, [settings]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FLOWS_STORAGE_KEY, JSON.stringify(flows));
+    } catch {}
+  }, [flows]);
 
   const [hookEvents, setHookEvents] = useState<HookEvent[]>([
     { id: 1, key: 'Ctrl+Alt+R', code: 'KeyR', modifiers: ['Ctrl', 'Alt'], timestamp: '14:32:01.115', latency: '1.1 ms', handled: true },
