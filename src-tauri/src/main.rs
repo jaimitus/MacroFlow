@@ -282,7 +282,7 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
         }
         "play_sound" => {
             let _ = std::process::Command::new("powershell")
-                .args(&["-NoProfile", "-NonInteractive", "-Command", "[System.Media.SystemSounds]::Beep.Play()"])
+                .args(&["-NoProfile", "-NonInteractive", "-Command", "[System.Console]::Beep(1000, 300)"])
                 .creation_flags(CREATE_NO_WINDOW)
                 .status();
             Ok("Sound played".to_string())

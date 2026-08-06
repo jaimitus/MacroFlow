@@ -123,21 +123,26 @@ export default function Designer(p: DesignerProps) {
           ))}
         </div>
 
-        {/* Canvas */}
-        <div
-          ref={canvasRef}
-          onMouseMove={handleCanvasMove}
-          onMouseUp={() => setDragId(null)}
-          onMouseLeave={() => setDragId(null)}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              p.onSelectNode(null);
-              setSelectedEdge(null);
-            }
-          }}
-          className="flex-1 relative dot-grid overflow-hidden select-none bg-canvas"
-        >
-          <svg className="absolute inset-0 w-full h-full pointer-events-none">
+        {/* Canvas Scroll Container */}
+        <div className="flex-1 relative overflow-auto custom-scrollbar bg-canvas select-none">
+          <div
+            ref={canvasRef}
+            onMouseMove={handleCanvasMove}
+            onMouseUp={() => setDragId(null)}
+            onMouseLeave={() => setDragId(null)}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                p.onSelectNode(null);
+                setSelectedEdge(null);
+              }
+            }}
+            style={{
+              minWidth: `${Math.max(2600, ...p.nodes.map((n) => n.x + 350))}px`,
+              minHeight: `${Math.max(900, ...p.nodes.map((n) => n.y + 250))}px`,
+            }}
+            className="relative dot-grid w-full h-full min-h-full"
+          >
+            <svg className="absolute inset-0 w-full h-full pointer-events-none">
             {p.edges.map((e, i) => {
               const from = p.nodes.find((n) => n.id === e.from);
               const to = p.nodes.find((n) => n.id === e.to);
@@ -261,6 +266,7 @@ export default function Designer(p: DesignerProps) {
             </div>
           )}
         </div>
+      </div>
 
         {/* Inspector */}
         <div className="w-[264px] bg-surface border-l border-line p-3.5 space-y-3 overflow-auto custom-scrollbar hidden lg:block">
