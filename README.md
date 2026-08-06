@@ -7,7 +7,7 @@
 
 **MacroFlow** is a lightweight, tray-based visual automation workspace for Windows. Design flows as nodes, inspect execution activity, test global shortcuts, and stop an in-progress run with a global emergency shortcut.
 
-> **Project status:** MacroFlow v1.4.2 includes a fully native robust execution engine. It acts as a visual automation workspace with real OS-level macros, conditional branching logic, dynamic DAG execution, and Windows-native interactions.
+> **Project status:** MacroFlow v1.5.0 includes a fully native robust execution engine. It acts as a visual automation workspace with real OS-level macros, conditional branching logic, dynamic DAG execution, and Windows-native interactions.
 
 ## Why MacroFlow?
 

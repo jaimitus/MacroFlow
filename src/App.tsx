@@ -403,6 +403,11 @@ export default function App() {
   const toggleFlow = (id: string) =>
     setFlows((fs) => fs.map((f) => (f.id === id ? { ...f, enabled: !f.enabled } : f)));
 
+  const handleImportFlow = useCallback((flow: Flow) => {
+    setFlows((fs) => [...fs, flow]);
+    appendLog('ok', `[import] imported flow "${flow.name}"`);
+  }, [appendLog]);
+
   return (
     <div className="flex flex-col w-screen h-screen overflow-hidden bg-surface text-ink">
         {/* Titlebar */}
@@ -487,7 +492,7 @@ export default function App() {
                 </button>
               </div>
               <div className="flex items-center gap-2 px-1 mt-2.5 text-[10.5px] text-ink-3">
-                <span className="w-1.5 h-1.5 rounded-full bg-success" /> v1.4.2 · Win 10/11
+                <span className="w-1.5 h-1.5 rounded-full bg-success" /> v1.5.0 · Win 10/11
               </div>
             </div>
           </div>
@@ -528,6 +533,7 @@ export default function App() {
                       setSelectedNodeId(null);
                       setActiveTab('designer');
                     }}
+                    onImportFlow={handleImportFlow}
                   />
                 )}
                 {activeTab === 'designer' && (

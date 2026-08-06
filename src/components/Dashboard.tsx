@@ -24,6 +24,7 @@ export interface DashboardProps {
   onKill: (source: string) => void;
   onToggleFlow: (id: string) => void;
   onEditFlow: (id: string) => void;
+  onImportFlow: (flow: Flow) => void;
 }
 
 export default function Dashboard(p: DashboardProps) {
@@ -97,7 +98,34 @@ export default function Dashboard(p: DashboardProps) {
         <div className="bg-surface rounded-xl border border-line shadow-card overflow-hidden">
           <div className="px-4 py-3 border-b border-line flex items-center justify-between">
             <h3 className="text-[13px] font-bold text-ink">Automations</h3>
-            <span className="text-[11px] text-ink-3">{p.flows.filter((f) => f.enabled).length} of {p.flows.length} enabled</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-ink-3 hidden sm:inline">{p.flows.filter((f) => f.enabled).length} of {p.flows.length} enabled</span>
+              <label className="cursor-pointer flex items-center gap-1.5 text-[11.5px] font-semibold text-brand hover:text-brand-strong transition-colors">
+                <Icon name="download" size={13} />
+                Import
+                <input
+                  type="file"
+                  accept=".macroflow,.json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                      try {
+                        const flow = JSON.parse(evt.target?.result as string) as Flow;
+                        flow.id = `flow-${Date.now()}`; // prevent id collisions
+                        p.onImportFlow(flow);
+                      } catch {
+                        alert("Invalid .macroflow file!");
+                      }
+                    };
+                    reader.readAsText(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
           </div>
           <div className="divide-y divide-line">
             {p.flows.map((f) => {
@@ -114,6 +142,21 @@ export default function Dashboard(p: DashboardProps) {
                   <span className="hidden sm:inline text-[10.5px] font-mono bg-elevated border border-line text-ink-2 px-2 py-1 rounded-md shrink-0">
                     {f.nodes.length} nodes
                   </span>
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([JSON.stringify(f, null, 2)], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${f.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.macroflow`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-brand hover:bg-brand/10 transition-colors shrink-0"
+                    title="Export .macroflow"
+                  >
+                    <Icon name="upload" size={15} />
+                  </button>
                   <button
                     onClick={() => p.onEditFlow(f.id)}
                     className="w-8 h-8 grid place-items-center rounded-lg text-ink-3 hover:text-brand hover:bg-brand/10 transition-colors shrink-0"

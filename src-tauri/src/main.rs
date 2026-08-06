@@ -14,8 +14,39 @@ struct AppState {
     sys: Mutex<System>,
 }
 
+fn resolve_variables(text: &str, is_send_keys: bool) -> String {
+    let mut result = text.to_string();
+    if result.contains("{DATE}") {
+        result = result.replace("{DATE}", &chrono::Local::now().format("%Y-%m-%d").to_string());
+    }
+    if result.contains("{TIME}") {
+        result = result.replace("{TIME}", &chrono::Local::now().format("%H:%M:%S").to_string());
+    }
+    if result.contains("{USER}") {
+        if let Ok(user) = std::env::var("USERNAME") {
+            result = result.replace("{USER}", &user);
+        }
+    }
+    if result.contains("{DOCS_PATH}") {
+        if let Ok(userprofile) = std::env::var("USERPROFILE") {
+            result = result.replace("{DOCS_PATH}", &format!("{}\\Documents", userprofile));
+        }
+    }
+    if !is_send_keys && result.contains("{CLIPBOARD}") {
+        if let Ok(output) = std::process::Command::new("powershell").args(&["-Command", "Get-Clipboard"]).output() {
+            let cb = String::from_utf8_lossy(&output.stdout).trim_end().to_string();
+            result = result.replace("{CLIPBOARD}", &cb);
+        }
+    }
+    result
+}
+
 #[tauri::command]
-fn execute_node(kind: String, config: std::collections::HashMap<String, String>) -> Result<String, String> {
+fn execute_node(kind: String, mut config: std::collections::HashMap<String, String>) -> Result<String, String> {
+    let is_send_keys = kind == "send_keys";
+    for val in config.values_mut() {
+        *val = resolve_variables(val, is_send_keys);
+    }
     match kind.as_str() {
         "delay" => {
             let ms: u64 = config.get("ms").and_then(|s| s.parse().ok()).unwrap_or(500);
@@ -143,14 +174,26 @@ fn execute_node(kind: String, config: std::collections::HashMap<String, String>)
         "condition" => {
             let expr = config.get("expr").cloned().unwrap_or_default();
             let mut result = true;
-            if expr.contains("len({CLIPBOARD}) > 0") {
-                let output = std::process::Command::new("powershell")
-                    .args(&["-Command", "Get-Clipboard"])
-                    .output()
-                    .unwrap();
-                let text = String::from_utf8_lossy(&output.stdout);
-                result = !text.trim().is_empty();
+            
+            // Basic condition evaluation engine
+            if expr.contains("len(") && expr.contains(") > 0") {
+                // e.g. len(value) > 0
+                let start = expr.find("len(").unwrap() + 4;
+                let end = expr.find(") > 0").unwrap();
+                let inner = &expr[start..end];
+                result = !inner.trim().is_empty();
+            } else if expr.contains("==") {
+                let parts: Vec<&str> = expr.split("==").collect();
+                if parts.len() == 2 {
+                    result = parts[0].trim() == parts[1].trim();
+                }
+            } else if expr.contains("!=") {
+                let parts: Vec<&str> = expr.split("!=").collect();
+                if parts.len() == 2 {
+                    result = parts[0].trim() != parts[1].trim();
+                }
             }
+
             if result { Ok("true".to_string()) } else { Ok("false".to_string()) }
         }
         _ => Ok("Simulated (Not fully implemented yet)".into())
