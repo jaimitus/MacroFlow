@@ -30,6 +30,22 @@
 | Diagnostics | Bounded logs/hooks/history, hook-latency sparkline, resource heartbeat |
 | Appearance | Light, dark, and system theme preference |
 
+## Dynamic Variables
+
+MacroFlow supports evaluating dynamic text inside any node (e.g. PowerShell scripts, Notifications, Condition branches). At runtime, before a node executes, the following variables will be automatically parsed and replaced:
+
+- `{DATE}` - Replaced with the current local date (e.g., `2026-08-06`).
+- `{TIME}` - Replaced with the current local time (e.g., `14:30:00`).
+- `{USER}` - Resolves to the active Windows username.
+- `{DOCS_PATH}` - Resolves to the absolute path of your Windows Documents folder.
+- `{CLIPBOARD}` - Injects the current textual content of the clipboard (this is bypassed in "Send Keys" nodes where `^v` is used natively for speed and formatting safety).
+
+You can use these dynamically in nodes like the `Condition` node. For example, a condition expression `len({CLIPBOARD}) > 0` will evaluate to `true` only if you have copied some text, letting you branch your DAG conditionally based on system state!
+
+## Sharing Automations (.macroflow)
+
+You can share your creations with the community! Every automation in the Dashboard has a prominent **EXPORT** button that saves a `.macroflow` JSON file to your disk. You can send this file to a friend or colleague, and they can load it directly into their workspace using the **IMPORT FLOW** button on the Dashboard.
+
 ### Important scope note
 
 MacroFlow's execution engine interacts deeply with the Windows OS. While the React frontend provides a beautiful layout, all heavy lifting (such as PowerShell injection, C# interoperability for mouse events, and hardware metrics) happens safely and asynchronously through the Rust backend.
