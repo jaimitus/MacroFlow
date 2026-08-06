@@ -10,6 +10,8 @@ import {
   closeWindow,
   minimizeWindow,
   toggleMaximizeWindow,
+  executeNode,
+  getSystemStats,
 } from './lib/tauri';
 import { DEFAULT_FLOWS, PALETTE } from './data';
 import type { Flow, HookEvent, LogEntry, LogLevel, NodeKind, Settings as AppSettings, TabId } from './types';
@@ -29,7 +31,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   minimizeToTray: true,
   startMinimized: false,
   notificationsEnabled: true,
-  killSwitch: 'Ctrl + Shift + Esc',
+  killSwitch: 'Ctrl + Shift + X',
 };
 
 const SETTINGS_STORAGE_KEY = 'macroflow.settings';
@@ -232,14 +234,23 @@ export default function App() {
     };
   }, []);
 
-  // Resource heartbeat (UI viz only)
+  // Resource heartbeat (Real hardware metrics)
   useEffect(() => {
-    const id = timers.setInterval(() => {
-      setCpuHistory((h) => [...h.slice(-39), +(isExecuting ? 1.8 + Math.random() * 1.2 : 0.3 + Math.random() * 0.5).toFixed(2)]);
-      setRamHistory((h) => [...h.slice(-39), +(27.9 + Math.random() * 0.5).toFixed(1)]);
-    }, 1200);
-    return () => timers.clearInterval(id);
-  }, [isExecuting, timers]);
+    let active = true;
+    const fetchStats = async () => {
+      const [cpu, ram] = await getSystemStats();
+      if (!active) return;
+      setCpuHistory((h) => [...h.slice(-39), +cpu.toFixed(1)]);
+      setRamHistory((h) => [...h.slice(-39), +ram.toFixed(1)]);
+    };
+    
+    void fetchStats();
+    const id = timers.setInterval(() => void fetchStats(), 1200);
+    return () => {
+      active = false;
+      timers.clearInterval(id);
+    };
+  }, [timers]);
 
   const handleNodesChange = useCallback(
     (nodes: Flow['nodes']) => setFlows((fs) => fs.map((f) => (f.id === flowId ? { ...f, nodes } : f))),
@@ -269,7 +280,19 @@ export default function App() {
               ? { script: 'Write-Output "ok"', timeout_ms: '5000' }
               : kind === 'notification'
                 ? { title: 'MacroFlow', body: 'Action completed' }
-                : { value: '…' };
+                : kind === 'open_url'
+                  ? { url: 'https://google.com' }
+                  : kind === 'close_app'
+                    ? { exe: 'notepad' }
+                    : kind === 'open_app'
+                      ? { exe: 'notepad.exe' }
+                      : kind === 'mouse_click'
+                        ? { button: 'left' }
+                        : kind === 'mouse_move'
+                          ? { x: '500', y: '500' }
+                          : kind === 'take_screenshot'
+                            ? { filename: 'screenshot.png' }
+                            : { value: '…' };
       const node: Flow['nodes'][number] = {
         id,
         kind,
@@ -310,21 +333,46 @@ export default function App() {
     }
 
     try {
-      const order = topologicalOrder(flow.nodes, flow.edges);
-      for (const id of order) {
+      const triggers = flow.nodes.filter((n) => n.category === 'trigger').map((n) => n.id);
+      const q = triggers.length > 0 ? [...triggers] : flow.nodes.length > 0 ? [flow.nodes[0].id] : [];
+      const seen = new Set<string>();
+
+      while (q.length > 0) {
         if (ctl.signal.aborted) break;
+        const id = q.shift()!;
+        if (seen.has(id)) continue;
+        seen.add(id);
+
         const node = flow.nodes.find((n) => n.id === id);
         if (!node) continue;
+
         if (mountedRef.current) {
           setCurrentExecNode(id);
           appendLog('inject', `[run] → ${node.label}`);
         }
-        const dur = node.kind === 'powershell' ? 460 : node.kind === 'delay' ? 650 : 170 + Math.random() * 120;
-        await sleep(dur, ctl.signal);
-        if (ctl.signal.aborted) break;
-        if (mountedRef.current) {
-          appendLog('ok', `[done] ${node.label}`);
-          recordLatency(0.5 + Math.random() * 1.1);
+        try {
+          const t0 = performance.now();
+          const result = await executeNode(node.kind, node.config);
+          const t1 = performance.now();
+          if (ctl.signal.aborted) break;
+          if (mountedRef.current) {
+            appendLog('ok', `[done] ${node.label} (${result})`);
+            recordLatency(t1 - t0);
+          }
+
+          let nextNodes: string[] = [];
+          if (node.kind === 'condition') {
+             const branchId = result === 'true' ? node.config.then : node.config.else;
+             if (branchId) nextNodes.push(branchId);
+          } else {
+             nextNodes = flow.edges.filter((e) => e.from === id).map((e) => e.to);
+          }
+          q.push(...nextNodes);
+        } catch (err: any) {
+          if (mountedRef.current) {
+            appendLog('err', `[error] ${node.label}: ${err.message}`);
+          }
+          break;
         }
       }
 
@@ -356,14 +404,10 @@ export default function App() {
     setFlows((fs) => fs.map((f) => (f.id === id ? { ...f, enabled: !f.enabled } : f)));
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-2 md:p-5">
-      <div className="fixed inset-0 -z-10 app-backdrop" />
-      <div className="fixed inset-0 -z-10 dot-grid opacity-30" style={{ backgroundSize: '34px 34px' }} />
-
-      <div className="w-full max-w-[1320px] h-[94vh] min-h-[620px] rounded-2xl border border-line overflow-hidden flex flex-col relative bg-surface" style={{ boxShadow: 'var(--shadow-window)' }}>
+    <div className="flex flex-col w-screen h-screen overflow-hidden bg-surface text-ink">
         {/* Titlebar */}
-        <div className="h-[46px] flex items-center justify-between px-3 select-none shrink-0 bg-elevated border-b border-line">
-          <div className="flex items-center gap-3 min-w-0">
+        <div data-tauri-drag-region className="h-[46px] flex items-center justify-between px-3 select-none shrink-0 bg-elevated border-b border-line">
+          <div data-tauri-drag-region className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand to-brand-strong grid place-items-center text-brand-fg shadow">
               <Icon name="nodes" size={17} />
             </div>
@@ -434,7 +478,7 @@ export default function App() {
             <div className="mt-auto p-2.5 hidden lg:block">
               <div className="rounded-xl bg-gradient-to-br from-danger to-[#a81c27] p-3 text-white shadow-card">
                 <div className="text-[9.5px] font-bold tracking-[0.16em] opacity-85 flex items-center gap-1"><Icon name="shield" size={11} /> KILL SWITCH</div>
-                <div className="text-[12px] font-black mt-0.5">Ctrl + Shift + Esc</div>
+                <div className="text-[12px] font-black mt-0.5">Ctrl + Shift + X</div>
                 <button
                   onClick={() => triggerKillSwitch('Sidebar')}
                   className="mt-2 w-full bg-white/95 hover:bg-white text-danger text-[10.5px] font-black py-1.5 rounded-lg transition-colors"
@@ -521,13 +565,12 @@ export default function App() {
               </span>
               <span className="ml-auto flex items-center gap-2">
                 <span className="hidden sm:flex items-center gap-1.5 bg-surface border border-line px-2 py-0.5 rounded-full font-mono text-[10px] text-ink-2">
-                  <Icon name="shield" size={10} className="text-danger" /> Ctrl+Shift+Esc
+                  <Icon name="shield" size={10} className="text-danger" /> Ctrl+Shift+X
                 </span>
               </span>
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }

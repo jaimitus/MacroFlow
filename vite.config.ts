@@ -22,6 +22,9 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     allowedHosts: true,
+    watch: {
+      ignored: ["**/src-tauri/**"]
+    }
   },
   preview: {
     host: "0.0.0.0",

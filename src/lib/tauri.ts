@@ -93,3 +93,32 @@ export function readHeapMB(): number | null {
   if (!mem) return null;
   return +(mem.usedJSHeapSize / 1024 / 1024).toFixed(1);
 }
+
+export async function executeNode(kind: string, config: Record<string, string>): Promise<string> {
+  if (!isTauri()) return 'Simulated';
+  const { invoke } = await import('@tauri-apps/api/core');
+  try {
+    return await invoke<string>('execute_node', { kind, config });
+  } catch (err: any) {
+    throw new Error(err.toString());
+  }
+}
+
+export async function getSystemStats(): Promise<[number, number]> {
+  if (!isTauri()) return [0.0, 0.0];
+  const { invoke } = await import('@tauri-apps/api/core');
+  try {
+    return await invoke<[number, number]>('get_system_stats');
+  } catch {
+    return [0.0, 0.0];
+  }
+}
+
+export async function openUrl(url: string): Promise<void> {
+  if (!isTauri()) {
+    window.open(url, '_blank');
+    return;
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('open_url', { url });
+}

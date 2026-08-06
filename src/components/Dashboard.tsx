@@ -76,10 +76,10 @@ export default function Dashboard(p: DashboardProps) {
         </StatCard>
 
         <StatCard icon="hdd" tint="success" label="RESOURCES">
-          <div className="text-[15px] font-bold text-ink mt-1.5">{cpu.toFixed(1)}% · {ram.toFixed(0)} MB</div>
+          <div className="text-[15px] font-bold text-ink mt-1.5">{cpu.toFixed(1)}% · {ram.toFixed(0)}% RAM</div>
           <div className="flex items-end justify-between gap-2 mt-0.5">
             <div className="text-[11px] text-ink-3">low footprint</div>
-            <Sparkline data={p.cpuHistory} width={96} height={28} color="var(--color-success)" max={4} />
+            <Sparkline data={p.cpuHistory} width={96} height={28} color="var(--color-success)" max={100} />
           </div>
         </StatCard>
 

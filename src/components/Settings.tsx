@@ -1,4 +1,5 @@
 import Icon from './Icon';
+import { openUrl } from '../lib/tauri';
 import type { ThemePref } from '../hooks/useTheme';
 import type { Settings } from '../types';
 
@@ -102,14 +103,12 @@ export default function Settings({ themePref, onThemeChange, settings, onSetting
             <div className="text-[11.5px] text-ink-2">Visual automation launcher for Windows 10 &amp; 11</div>
           </div>
           <div className="ml-auto flex gap-2">
-            <a
-              href="https://github.com/jaimitus/MacroFlow"
-              target="_blank"
-              rel="noreferrer"
+            <button
+              onClick={() => openUrl('https://github.com/jaimitus/MacroFlow')}
               className="flex items-center gap-1.5 text-[11.5px] font-semibold bg-elevated border border-line text-ink px-3 py-1.5 rounded-lg hover:border-brand/40 transition-colors"
             >
               <Icon name="github" size={14} /> GitHub
-            </a>
+            </button>
           </div>
         </div>
       </Section>
