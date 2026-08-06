@@ -8,6 +8,10 @@ export interface SettingsProps {
   onThemeChange: (p: ThemePref) => void;
   settings: Settings;
   onSettingsChange: (s: Settings) => void;
+  onRestoreExamples?: () => void;
+  onResetExamples?: () => void;
+  flowsCount?: number;
+  examplesCount?: number;
 }
 
 const THEMES: Array<{ id: ThemePref; label: string; icon: string; hint: string }> = [
@@ -16,7 +20,7 @@ const THEMES: Array<{ id: ThemePref; label: string; icon: string; hint: string }
   { id: 'system', label: 'System', icon: 'monitor', hint: 'Match Windows' },
 ];
 
-export default function Settings({ themePref, onThemeChange, settings, onSettingsChange }: SettingsProps) {
+export default function Settings({ themePref, onThemeChange, settings, onSettingsChange, onRestoreExamples, onResetExamples, flowsCount, examplesCount }: SettingsProps) {
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) =>
     onSettingsChange({ ...settings, [key]: value });
 
@@ -92,6 +96,47 @@ export default function Settings({ themePref, onThemeChange, settings, onSetting
         </div>
       </Section>
 
+      {/* Examples */}
+      <Section icon="layers" title="Example flows" desc="7 flows included by default to learn by example">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-4 py-1">
+            <div className="min-w-0">
+              <div className="text-[12.5px] font-semibold text-ink">Restore examples</div>
+              <div className="text-[11px] text-ink-2 mt-0.5">
+                {typeof flowsCount === 'number' && typeof examplesCount === 'number'
+                  ? `${flowsCount} flows total · ${examplesCount} examples available — missing ones will be re-added without deleting yours`
+                  : 'Re-add any deleted example flows without deleting your custom flows'}
+              </div>
+            </div>
+            <button
+              onClick={() => onRestoreExamples?.()}
+              className="shrink-0 flex items-center gap-1.5 bg-brand hover:bg-brand-strong text-brand-fg text-[12px] font-semibold px-3.5 py-2 rounded-lg transition-colors"
+            >
+              <Icon name="download" size={14} /> Restore
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-4 py-2 border-t border-line">
+            <div className="min-w-0">
+              <div className="text-[12.5px] font-semibold text-ink">Reset to defaults</div>
+              <div className="text-[11px] text-ink-2 mt-0.5">Replace all flows with the 7 original examples (cannot be undone)</div>
+            </div>
+            <button
+              onClick={() => {
+                if (confirm('Reset all flows to the 7 default examples? Your custom flows will be removed.')) {
+                  onResetExamples?.();
+                }
+              }}
+              className="shrink-0 flex items-center gap-1.5 bg-surface border border-danger/30 hover:bg-danger/5 text-danger text-[12px] font-semibold px-3.5 py-2 rounded-lg transition-colors"
+            >
+              <Icon name="trash" size={14} /> Reset
+            </button>
+          </div>
+          <div className="text-[11px] text-ink-3 bg-elevated border border-line rounded-lg px-3 py-2">
+            Examples are also in <code className="font-mono bg-surface border border-line px-1 rounded">examples/*.macroflow</code> and <code className="font-mono bg-surface border border-line px-1 rounded">docs/OCR_GUIDE.md</code> — import via Dashboard → Import.
+          </div>
+        </div>
+      </Section>
+
       {/* About */}
       <Section icon="info" title="About" desc="">
         <div className="flex items-center gap-3">
@@ -99,7 +144,7 @@ export default function Settings({ themePref, onThemeChange, settings, onSetting
             <Icon name="nodes" size={20} />
           </div>
           <div>
-            <div className="text-[13px] font-bold text-ink">MacroFlow <span className="text-ink-3 font-normal">v1.4.2</span></div>
+            <div className="text-[13px] font-bold text-ink">MacroFlow <span className="text-ink-3 font-normal">v1.6.0</span></div>
             <div className="text-[11.5px] text-ink-2">Visual automation launcher for Windows 10 &amp; 11</div>
           </div>
           <div className="ml-auto flex gap-2">

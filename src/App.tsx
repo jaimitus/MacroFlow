@@ -657,6 +657,24 @@ export default function App() {
     appendLog('info', `[flow] renamed to "${name}"`);
   }, [appendLog, setFlows]);
 
+  const handleRestoreExamples = useCallback(() => {
+    const missing = DEFAULT_FLOWS.filter(df => !flows.some(f=> f.id===df.id));
+    if (missing.length===0) {
+      appendLog('info', '[examples] all 7 already present');
+      return;
+    }
+    setFlows(fs => [...fs, ...missing]);
+    appendLog('ok', `[examples] restored ${missing.length} flows`);
+  }, [flows, setFlows, appendLog]);
+
+  const handleResetExamples = useCallback(() => {
+    setFlows(DEFAULT_FLOWS);
+    setFlowId(DEFAULT_FLOWS[0].id);
+    setSelectedNodeId(null);
+    setSelectedIds([]);
+    appendLog('warn', '[examples] reset to 7 defaults');
+  }, [setFlows, appendLog]);
+
   const handleExportFlow = useCallback(async (id: string) => {
     const target = flows.find(f => f.id === id);
     if (!target) return;
@@ -803,7 +821,7 @@ export default function App() {
                   />
                 )}
                 {activeTab === 'settings' && (
-                  <Settings themePref={pref} onThemeChange={setPref} settings={settings} onSettingsChange={setSettings} />
+                  <Settings themePref={pref} onThemeChange={setPref} settings={settings} onSettingsChange={setSettings} onRestoreExamples={handleRestoreExamples} onResetExamples={handleResetExamples} flowsCount={flows.length} examplesCount={DEFAULT_FLOWS.length} />
                 )}
               </div>
             </div>
