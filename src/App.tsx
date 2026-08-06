@@ -692,7 +692,7 @@ export default function App() {
                 <div className="text-[12px] font-black mt-0.5">Ctrl + Shift + X</div>
                 <button onClick={() => triggerKillSwitch('Sidebar')} className="mt-2 w-full bg-white/95 hover:bg-white text-danger text-[10.5px] font-black py-1.5 rounded-lg transition-colors">TEST STOP</button>
               </div>
-              <div className="flex items-center gap-2 px-1 mt-2.5 text-[10.5px] text-ink-3"><span className="w-1.5 h-1.5 rounded-full bg-success" /> v1.5.0 · Win 10/11</div>
+              <div className="flex items-center gap-2 px-1 mt-2.5 text-[10.5px] text-ink-3"><span className="w-1.5 h-1.5 rounded-full bg-success" /> v1.6.0 · Win 10/11</div>
             </div>
           </div>
 

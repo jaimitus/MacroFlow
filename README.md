@@ -7,7 +7,7 @@
 
 **MacroFlow** is a lightweight, tray-based visual automation workspace for Windows. Design flows as nodes, inspect execution activity, test global shortcuts, and stop an in-progress run with a global emergency shortcut.
 
-> **Project status:** MacroFlow v1.6.0 includes a fully native robust execution engine with **Undo/Redo (Ctrl+Z/Y)**, **Minimap & Zoom**, **Auto-Layout**, **Command Palette (Ctrl+K)**, **Cyclic Loop/Repeat nodes**, **Mouse Wheel horizontal canvas scrolling**, **Audible system sound alerts**, **Native .macroflow file exporting**, and an expanded node palette for desktop automation.
+> **Project status:** MacroFlow v1.6.0 includes a fully native robust execution engine with **Cyclic Loop/Repeat nodes**, **Designer Quick Wins (Undo/Redo Ctrl+Z/Y, Zoom/Pan/Minimap, Multi-select, Snap Grid 20px, Auto-layout, Fit view, Validation, Command Palette Ctrl+K, Favorites/Recientes, Collapsible palette por grupos, Flow Duplicate/Rename)**, **Mouse Wheel horizontal canvas scrolling**, **Audible system sound alerts**, **Native .macroflow file exporting**, and an expanded node palette for desktop automation.
 
 ## Why MacroFlow?
 

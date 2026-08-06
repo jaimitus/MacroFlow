@@ -68,6 +68,26 @@ export default function Designer(p: DesignerProps) {
   const [renameDesc, setRenameDesc] = useState('');
   const [scrollPos, setScrollPos] = useState({ left: 0, top: 0, w: 0, h: 0 });
   const [showHelp, setShowHelp] = useState(false);
+  const PALETTE_GROUPS: Array<{id:string, label:string, icon:string, kinds: NodeKind[]}> = [
+    {id:'triggers', label:'TRIGGERS', icon:'zap', kinds:['hotkey','window_focus','schedule','startup','clipboard']},
+    {id:'input', label:'Entrada', icon:'type', kinds:['send_keys','mouse_click','mouse_move']},
+    {id:'system', label:'Sistema', icon:'monitor', kinds:['open_app','close_app','focus_window','open_url','take_screenshot']},
+    {id:'logic', label:'Flujo', icon:'branch', kinds:['delay','condition','repeat']},
+    {id:'ui', label:'Notificación', icon:'bell', kinds:['notification','play_sound']},
+    {id:'data', label:'Datos & Red', icon:'globe', kinds:['clipboard_set','http_request','file_write','web_search','powershell']},
+  ];
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(()=>{
+    try { const raw = JSON.parse(localStorage.getItem('macroflow.palette.collapsed')||'[]'); return new Set(raw); } catch { return new Set(['system','ui','data']); }
+  });
+  const toggleGroup = (id:string) => {
+    setCollapsedGroups(prev=>{
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try { localStorage.setItem('macroflow.palette.collapsed', JSON.stringify(Array.from(next))); } catch {}
+      return next;
+    });
+  };
 
   const selected = p.nodes.find((n) => n.id === p.selectedNodeId) ?? null;
   const currentFlow = p.flows.find(f=>f.id===p.flowId) ?? p.flows[0];
@@ -369,52 +389,56 @@ export default function Designer(p: DesignerProps) {
       </div>
 
       <div className="flex flex-1 min-h-[460px] min-w-0 overflow-hidden relative">
-        {/* Palette */}
-        <div className="w-[188px] bg-elevated border-r border-line flex flex-col hidden md:flex shrink-0">
+        {/* Palette - collapsible by type */}
+        <div className="w-[212px] bg-elevated border-r border-line flex flex-col hidden md:flex shrink-0">
           <div className="p-2 border-b border-line space-y-2">
             <div className="relative">
               <Icon name="search" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none" />
-              <input value={showPaletteSearch} onChange={e=> setShowPaletteSearch(e.target.value)} placeholder="Buscar nodo…" className="w-full text-[11px] border border-line rounded-lg pl-7 pr-7 py-1.5 bg-surface text-ink placeholder:text-ink-3 focus:outline-none focus:border-brand" />
+              <input value={showPaletteSearch} onChange={e=> setShowPaletteSearch(e.target.value)} placeholder={`Buscar nodo… (${PALETTE.length})`} className="w-full text-[11px] border border-line rounded-lg pl-7 pr-7 py-1.5 bg-surface text-ink placeholder:text-ink-3 focus:outline-none focus:border-brand" />
               {showPaletteSearch && <button onClick={()=> setShowPaletteSearch('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 grid place-items-center rounded hover:bg-ink/10 text-ink-3"><Icon name="x" size={10} /></button>}
             </div>
-            {p.selectedIds.length>1 && <div className="text-[10px] bg-brand/10 text-brand border border-brand/20 rounded-md px-2 py-1 text-center font-semibold">{p.selectedIds.length} seleccionados · arrastra para mover en bloque<br/><span className="font-normal text-[10px]">Ctrl+C / Ctrl+V · Delete</span></div>}
-          </div>
-          <div className="flex-1 overflow-auto custom-scrollbar p-2 space-y-3">
-            {showPaletteSearch.trim()==='' && favPalette.length>0 && (
-              <div>
-                <div className="text-[9.5px] font-bold tracking-[0.14em] text-ink-3 px-1 pb-1 flex items-center gap-1"><span className="text-[10px]">★</span> FAVORITOS</div>
-                <div className="space-y-1.5">
-                  {favPalette.map(x=> <PaletteButton key={`fav-${x.kind}`} item={x} isFav={true} onToggleFav={()=> toggleFav(x.kind)} onAdd={() => p.onAddNode(x.kind)} />)}
-                </div>
-              </div>
-            )}
-            {showPaletteSearch.trim()==='' && recentPalette.length>0 && (
-              <div>
-                <div className="text-[9.5px] font-bold tracking-[0.14em] text-ink-3 px-1 pb-1">RECIENTES</div>
-                <div className="space-y-1.5">
-                  {recentPalette.slice(0,5).map(x=> <PaletteButton key={`rec-${x.kind}`} item={x} isFav={favKinds.has(x.kind)} onToggleFav={()=> toggleFav(x.kind)} onAdd={() => p.onAddNode(x.kind)} />)}
-                </div>
-              </div>
-            )}
-            <div>
-              <div className="text-[9.5px] font-bold tracking-[0.14em] text-ink-3 px-1 pb-1">TRIGGERS</div>
-              <div className="space-y-1.5">
-                {filteredPalette.filter((x) => x.cat === 'trigger').map((x) => (
-                  <PaletteButton key={x.kind} item={x} isFav={favKinds.has(x.kind)} onToggleFav={()=> toggleFav(x.kind)} onAdd={() => p.onAddNode(x.kind)} />
-                ))}
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-ink-3 font-medium">{showPaletteSearch.trim() ? `${filteredPalette.length} resultados` : `${PALETTE.length} nodos`}</span>
+              <div className="flex gap-1">
+                <button onClick={()=> setCollapsedGroups(new Set())} className="px-1.5 py-0.5 rounded border border-line bg-surface hover:bg-brand/10 hover:text-brand" title="Expandir todo">⛶</button>
+                <button onClick={()=> setCollapsedGroups(new Set(['fav','recent', ...PALETTE_GROUPS.map(g=>g.id)]))} className="px-1.5 py-0.5 rounded border border-line bg-surface hover:bg-brand/10 hover:text-brand" title="Colapsar todo">▭</button>
               </div>
             </div>
-            <div>
-              <div className="text-[9.5px] font-bold tracking-[0.14em] text-ink-3 px-1 pb-1 pt-1">ACTIONS</div>
-              <div className="space-y-1.5">
-                {filteredPalette.filter((x) => x.cat === 'action').map((x) => (
-                  <PaletteButton key={x.kind} item={x} isFav={favKinds.has(x.kind)} onToggleFav={()=> toggleFav(x.kind)} onAdd={() => p.onAddNode(x.kind)} />
-                ))}
-                {filteredPalette.filter(x=>x.cat==='action').length===0 && filteredPalette.filter(x=>x.cat==='trigger').length===0 && <div className="text-[11px] text-ink-3 text-center py-4">Sin resultados</div>}
-              </div>
-            </div>
+            {p.selectedIds.length>1 && <div className="text-[10px] bg-brand/10 text-brand border border-brand/20 rounded-md px-2 py-1 text-center font-semibold">{p.selectedIds.length} seleccionados · arrastra para mover<br/><span className="font-normal text-[10px]">Ctrl+C / Ctrl+V · Delete</span></div>}
           </div>
-          <div className="p-2 border-t border-line text-[10px] text-ink-3 text-center">Ctrl+K · arrastrar · Shift+click</div>
+          <div className="flex-1 overflow-auto custom-scrollbar p-2 space-y-2">
+            {showPaletteSearch.trim() !== '' ? (
+              <div className="space-y-1.5">
+                <div className="text-[9.5px] font-bold tracking-[0.14em] text-ink-3 px-1 pb-1">RESULTADOS · {filteredPalette.length}</div>
+                {filteredPalette.map(x=> <PaletteButton key={x.kind} item={x} isFav={favKinds.has(x.kind)} onToggleFav={()=> toggleFav(x.kind)} onAdd={()=> p.onAddNode(x.kind)} />)}
+                {filteredPalette.length===0 && <div className="text-[11px] text-ink-3 text-center py-6">Sin resultados para “{showPaletteSearch}”</div>}
+              </div>
+            ) : (
+              <>
+                {favPalette.length>0 && (
+                  <PaletteGroup id="fav" label="FAVORITOS" icon="type" count={favPalette.length} collapsed={collapsedGroups.has('fav')} onToggle={()=> toggleGroup('fav')}>
+                    {favPalette.map(x=> <PaletteButton key={`fav-${x.kind}`} item={x} isFav={true} onToggleFav={()=> toggleFav(x.kind)} onAdd={() => p.onAddNode(x.kind)} />)}
+                  </PaletteGroup>
+                )}
+                {recentPalette.length>0 && (
+                  <PaletteGroup id="recent" label="RECIENTES" icon="clock" count={Math.min(5, recentPalette.length)} collapsed={collapsedGroups.has('recent')} onToggle={()=> toggleGroup('recent')}>
+                    {recentPalette.slice(0,5).map(x=> <PaletteButton key={`rec-${x.kind}`} item={x} isFav={favKinds.has(x.kind)} onToggleFav={()=> toggleFav(x.kind)} onAdd={() => p.onAddNode(x.kind)} />)}
+                  </PaletteGroup>
+                )}
+                {PALETTE_GROUPS.map(g=>{
+                  const items = PALETTE.filter(pa=> g.kinds.includes(pa.kind as NodeKind));
+                  return (
+                    <PaletteGroup key={g.id} id={g.id} label={g.label} icon={g.icon} count={items.length} collapsed={collapsedGroups.has(g.id)} onToggle={()=> toggleGroup(g.id)}>
+                      {items.map(x=> <PaletteButton key={x.kind} item={x} isFav={favKinds.has(x.kind)} onToggleFav={()=> toggleFav(x.kind)} onAdd={()=> p.onAddNode(x.kind)} />)}
+                    </PaletteGroup>
+                  );
+                })}
+              </>
+            )}
+          </div>
+          <div className="p-2 border-t border-line text-[10px] text-ink-3 text-center flex items-center justify-center gap-1.5">
+            <Icon name="layers" size={10} /> {PALETTE_GROUPS.length} grupos · Ctrl+K
+          </div>
         </div>
 
         {/* Canvas area with fixed minimap overlay */}
@@ -881,6 +905,24 @@ function PaletteButton({ item, onAdd, isFav, onToggleFav }: { item: (typeof PALE
           <span className="text-[12px]">{isFav? '★' : '☆'}</span>
         </button>
       )}
+    </div>
+  );
+}
+
+function PaletteGroup({ id: _id, label, icon, count, collapsed, onToggle, children }: { id:string, label:string, icon:string, count:number, collapsed:boolean, onToggle:()=>void, children:React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <button onClick={onToggle} className="w-full flex items-center justify-between px-1 py-1 hover:bg-ink/[0.04] rounded-md group">
+        <span className="text-[9.5px] font-bold tracking-[0.14em] text-ink-3 flex items-center gap-1.5">
+          <Icon name={icon} size={11} className="text-ink-3 group-hover:text-brand transition-colors" />
+          {label}
+          <span className="bg-surface border border-line text-ink-2 text-[9px] px-1.5 py-0 rounded-full font-mono">{count}</span>
+        </span>
+        <span className={`w-5 h-5 grid place-items-center rounded-md border text-ink-3 group-hover:text-brand transition-colors ${collapsed ? 'border-transparent' : 'bg-surface border-line'}`}>
+          <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={10} />
+        </span>
+      </button>
+      {!collapsed && <div className="space-y-1.5 animate-[rise-in_0.2s_ease]">{children}</div>}
     </div>
   );
 }
