@@ -26,7 +26,10 @@ export type ActionKind =
   | 'for_each'
   | 'json_parse'
   | 'lock_pc'
-  | 'volume_control';
+  | 'volume_control'
+  | 'ai_prompt'
+  | 'ai_condition'
+  | 'ai_vision';
 export type NodeKind = TriggerKind | ActionKind;
 
 export interface FlowNode {
@@ -83,10 +86,16 @@ export interface PaletteItem {
   desc: string;
 }
 
+export type AiProvider = 'ollama' | 'openai' | 'anthropic' | 'auto';
+
 export interface Settings {
   startWithWindows: boolean;
   minimizeToTray: boolean;
   startMinimized: boolean;
   notificationsEnabled: boolean;
   killSwitch: string;
+  aiProvider: AiProvider;
+  aiEndpoint: string;
+  aiModel: string;
+  aiVisionModel: string;
 }

@@ -76,6 +76,7 @@ export default function Designer(p: DesignerProps) {
     {id:'logic', label:'Flow', icon:'branch', kinds:['delay','condition','repeat','for_each']},
     {id:'ui', label:'Notification', icon:'bell', kinds:['notification','play_sound']},
     {id:'data', label:'Data & Network', icon:'globe', kinds:['clipboard_set','http_request','file_write','web_search','powershell','json_parse']},
+    {id:'ai', label:'AI', icon:'cpu', kinds:['ai_prompt','ai_condition','ai_vision']},
   ];
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(()=>{
     try { const raw = JSON.parse(localStorage.getItem('macroflow.palette.collapsed')||'[]'); return new Set(raw); } catch { return new Set(['system','ui','data']); }

@@ -13,6 +13,8 @@ import {
   toggleMaximizeWindow,
   executeNode,
   getSystemStats,
+  getAiConfig,
+  setAiConfig,
 } from './lib/tauri';
 import { invoke } from '@tauri-apps/api/core';
 import { DEFAULT_FLOWS, PALETTE } from './data';
@@ -35,6 +37,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   startMinimized: false,
   notificationsEnabled: true,
   killSwitch: 'Ctrl + Shift + X',
+  aiProvider: 'auto',
+  aiEndpoint: 'http://localhost:11434',
+  aiModel: 'llama3.2',
+  aiVisionModel: 'llava',
 };
 
 const SETTINGS_STORAGE_KEY = 'macroflow.settings';
@@ -50,6 +56,10 @@ function readStoredSettings(): AppSettings {
       startMinimized: typeof stored.startMinimized === 'boolean' ? stored.startMinimized : DEFAULT_SETTINGS.startMinimized,
       notificationsEnabled: typeof stored.notificationsEnabled === 'boolean' ? stored.notificationsEnabled : DEFAULT_SETTINGS.notificationsEnabled,
       killSwitch: typeof stored.killSwitch === 'string' ? stored.killSwitch : DEFAULT_SETTINGS.killSwitch,
+      aiProvider: (stored.aiProvider === 'ollama' || stored.aiProvider === 'openai' || stored.aiProvider === 'anthropic' || stored.aiProvider === 'auto') ? stored.aiProvider : DEFAULT_SETTINGS.aiProvider,
+      aiEndpoint: typeof stored.aiEndpoint === 'string' ? stored.aiEndpoint : DEFAULT_SETTINGS.aiEndpoint,
+      aiModel: typeof stored.aiModel === 'string' ? stored.aiModel : DEFAULT_SETTINGS.aiModel,
+      aiVisionModel: typeof stored.aiVisionModel === 'string' ? stored.aiVisionModel : DEFAULT_SETTINGS.aiVisionModel,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -141,6 +151,19 @@ export default function App() {
       localStorage.setItem(FLOWS_STORAGE_KEY, JSON.stringify(flows));
     } catch {}
   }, [flows]);
+
+  // Sync AI provider between frontend and Rust (hybrid Ollama/OpenAI)
+  useEffect(() => {
+    getAiConfig().then(([p,e,m,v]) => {
+      if (p !== settings.aiProvider || e !== settings.aiEndpoint || m !== settings.aiModel || v !== settings.aiVisionModel) {
+        setSettings(s => ({ ...s, aiProvider: p as any, aiEndpoint: e, aiModel: m, aiVisionModel: v }));
+      }
+    }).catch(()=>{});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    setAiConfig(settings.aiProvider, settings.aiEndpoint, settings.aiModel, settings.aiVisionModel).catch(()=>{});
+  }, [settings.aiProvider, settings.aiEndpoint, settings.aiModel, settings.aiVisionModel]);
 
   const [hookEvents, setHookEvents] = useState<HookEvent[]>([
     { id: 1, key: 'Ctrl+Alt+R', code: 'KeyR', modifiers: ['Ctrl', 'Alt'], timestamp: '14:32:01.115', latency: '1.1 ms', handled: true },
@@ -380,7 +403,13 @@ export default function App() {
                                                     ? { path: '{DOCS_PATH}\\watch.txt', interval: '1000' }
                                                     : kind === 'at_time'
                                                       ? { cron: '0 9 * * 1', timezone: 'local' }
-                                                      : { value: '…' };
+                                                      : kind === 'ai_prompt'
+                                                        ? { provider: 'auto', model: 'llama3.2', prompt: 'Summarize: {OCR_TEXT}', temperature: '0.2' }
+                                                        : kind === 'ai_condition'
+                                                          ? { provider: 'auto', model: 'llama3.2', question: 'Is this invoice total > 100? {OCR_TEXT}' }
+                                                          : kind === 'ai_vision'
+                                                            ? { provider: 'auto', model: 'llava', prompt: 'Describe this image' }
+                                                            : { value: '…' };
       const node: Flow['nodes'][number] = {
         id,
         kind,
@@ -552,8 +581,10 @@ export default function App() {
             recordLatency(t1 - t0);
           }
           let nextNodes: string[] = [];
-          if (node.kind === 'condition') {
-             const branchId = result === 'true' ? node.config.then : node.config.else;
+          if (node.kind === 'condition' || node.kind === 'ai_condition') {
+             // ai_condition returns true/false via AI
+             const isTrue = result.trim().toLowerCase().startsWith('true');
+             const branchId = isTrue ? node.config.then : node.config.else;
              if (branchId) nextNodes.push(branchId);
           } else {
              nextNodes = targetFlow.edges.filter((e) => e.from === id).map((e) => e.to);

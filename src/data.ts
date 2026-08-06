@@ -32,6 +32,9 @@ export const PALETTE: PaletteItem[] = [
   { kind: 'json_parse', label: 'JSON Parse', cat: 'action', icon: 'braces', color: '#0F6CBD', desc: 'parse JSON' },
   { kind: 'lock_pc', label: 'Lock PC', cat: 'action', icon: 'shield', color: '#5C6370', desc: 'lock workstation' },
   { kind: 'volume_control', label: 'Volume', cat: 'action', icon: 'bell', color: '#107C10', desc: 'set volume %' },
+  { kind: 'ai_prompt', label: 'AI Prompt', cat: 'action', icon: 'cpu', color: '#8764B8', desc: 'ask AI (Ollama/OpenAI)' },
+  { kind: 'ai_condition', label: 'AI Condition', cat: 'action', icon: 'branch', color: '#D83B01', desc: 'AI true/false' },
+  { kind: 'ai_vision', label: 'AI Vision', cat: 'action', icon: 'eye', color: '#E01765', desc: 'describe image' },
 ];
 
 export const VARIABLES = [
@@ -43,6 +46,7 @@ export const VARIABLES = [
   { token: '{DOCS_PATH}', type: 'string', desc: 'Documents folder path' },
   { token: '{OCR_TEXT}', type: 'string', desc: 'last OCR result' },
   { token: '{JSON_VALUE}', type: 'string', desc: 'last JSON parse result' },
+  { token: '{AI_RESULT}', type: 'string', desc: 'last AI response' },
 ];
 
 export const DEFAULT_FLOWS: Flow[] = [
@@ -210,6 +214,32 @@ export const DEFAULT_FLOWS: Flow[] = [
       { from: 'a2_json', to: 'a3_each' },
       { from: 'a3_each', to: 'a4_write' },
       { from: 'a4_write', to: 'a5_notify' },
+    ],
+  },
+  {
+    id: 'flow-ai',
+    name: '🤖 AI Hybrid — OCR + Prompt + Vision',
+    description: 'Ollama local (llama3.2/llava) with OpenAI fallback via Vault — summarize OCR, smart condition, vision describe',
+    enabled: true,
+    nodes: [
+      { id: 't1', kind: 'hotkey', category: 'trigger', label: 'AI Trigger', x: 40, y: 100, config: { hotkey: 'Run' }, color: '#0078D4', icon: 'keyboard' },
+      { id: 'a1_ocr', kind: 'ocr_screen', category: 'action', label: 'OCR Screen', x: 260, y: 100, config: { lang: 'eng', psm: '6', region: 'full' }, color: '#E01765', icon: 'eye' },
+      { id: 'a2_prompt', kind: 'ai_prompt', category: 'action', label: 'AI Summarize', x: 480, y: 100, config: { provider: 'auto', model: 'llama3.2', prompt: 'Summarize this invoice in 3 bullets: {OCR_TEXT}', temperature: '0.2' }, color: '#8764B8', icon: 'cpu' },
+      { id: 'a3_cond', kind: 'ai_condition', category: 'action', label: 'AI Is Big Invoice?', x: 700, y: 100, config: { provider: 'auto', model: 'llama3.2', question: 'Is this invoice total > 100? Answer true or false: {OCR_TEXT}' }, color: '#D83B01', icon: 'branch' },
+      { id: 'a4_true', kind: 'notification', category: 'action', label: 'Big Invoice', x: 920, y: 40, config: { title: 'AI: Big Invoice', body: '{AI_RESULT}' }, color: '#107C10', icon: 'bell' },
+      { id: 'a4_false', kind: 'notification', category: 'action', label: 'Small Invoice', x: 920, y: 160, config: { title: 'AI: Small', body: '{AI_RESULT}' }, color: '#5C6370', icon: 'bell' },
+      { id: 'a5_vision', kind: 'ai_vision', category: 'action', label: 'Vision Describe', x: 1140, y: 100, config: { provider: 'auto', model: 'llava', prompt: 'Describe this invoice image: what is total and date?' }, color: '#E01765', icon: 'eye' },
+      { id: 'a6_save', kind: 'file_write', category: 'action', label: 'Save AI', x: 1360, y: 100, config: { path: '{DOCS_PATH}\\ai_result.txt', content: '[{DATE} {TIME}] OCR:{OCR_TEXT} | AI:{AI_RESULT}' }, color: '#107C10', icon: 'terminal' },
+    ],
+    edges: [
+      { from: 't1', to: 'a1_ocr' },
+      { from: 'a1_ocr', to: 'a2_prompt' },
+      { from: 'a2_prompt', to: 'a3_cond' },
+      { from: 'a3_cond', to: 'a4_true' },
+      { from: 'a3_cond', to: 'a4_false' },
+      { from: 'a4_true', to: 'a5_vision' },
+      { from: 'a4_false', to: 'a5_vision' },
+      { from: 'a5_vision', to: 'a6_save' },
     ],
   },
 ];

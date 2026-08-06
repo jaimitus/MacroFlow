@@ -154,6 +154,55 @@ export default function Settings({ themePref, onThemeChange, settings, onSetting
         </div>
       </Section>
 
+      {/* AI Provider - Hybrid Ollama / OpenAI / Anthropic */}
+      <Section icon="cpu" title="AI Provider" desc="Hybrid: Ollama local (free, private) + OpenAI/Anthropic via Vault">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1">
+              <span className="text-[11px] font-semibold text-ink-2">Provider</span>
+              <select value={settings.aiProvider} onChange={e=> set('aiProvider', e.target.value as any)} className="w-full text-[12px] border border-line rounded-lg px-2.5 py-1.5 bg-surface text-ink focus:outline-none focus:border-brand">
+                <option value="auto">Auto (Ollama → OpenAI → Anthropic → Sim)</option>
+                <option value="ollama">Ollama (local)</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] font-semibold text-ink-2">Ollama Endpoint</span>
+              <input value={settings.aiEndpoint} onChange={e=> set('aiEndpoint', e.target.value)} placeholder="http://localhost:11434" className="w-full text-[12px] border border-line rounded-lg px-2.5 py-1.5 bg-surface text-ink font-mono focus:outline-none focus:border-brand" />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1">
+              <span className="text-[11px] font-semibold text-ink-2">Text Model</span>
+              <input value={settings.aiModel} onChange={e=> set('aiModel', e.target.value)} placeholder="llama3.2" className="w-full text-[12px] border border-line rounded-lg px-2.5 py-1.5 bg-surface text-ink font-mono focus:outline-none focus:border-brand" list="ai-models" />
+              <datalist id="ai-models">
+                <option value="llama3.2" />
+                <option value="mistral" />
+                <option value="gemma2" />
+                <option value="gpt-4o-mini" />
+                <option value="claude-3-haiku-20240307" />
+              </datalist>
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] font-semibold text-ink-2">Vision Model</span>
+              <input value={settings.aiVisionModel} onChange={e=> set('aiVisionModel', e.target.value)} placeholder="llava" className="w-full text-[12px] border border-line rounded-lg px-2.5 py-1.5 bg-surface text-ink font-mono focus:outline-none focus:border-brand" list="ai-vision-models" />
+              <datalist id="ai-vision-models">
+                <option value="llava" />
+                <option value="llava:7b" />
+                <option value="bakllava" />
+                <option value="gpt-4o" />
+              </datalist>
+            </label>
+          </div>
+          <div className="text-[11px] text-ink-3 bg-elevated border border-line rounded-lg px-3 py-2 space-y-1">
+            <div><b>Auto</b> tries <code className="font-mono bg-surface border border-line px-1 rounded">Ollama</code> at <code className="font-mono">{settings.aiEndpoint}</code> → then <code className="font-mono">Vault:openai_api</code> → then <code className="font-mono">Vault:anthropic_api</code> → sim fallback.</div>
+            <div>For Ollama: <code className="font-mono">ollama pull {settings.aiModel}</code> and <code className="font-mono">ollama pull {settings.aiVisionModel}</code>. Check <code className="font-mono">http://localhost:11434</code> is running.</div>
+            <div>For cloud: store keys in Vault above as <code className="font-mono">openai_api</code> / <code className="font-mono">anthropic_api</code> (service <code className="font-mono">macroflow</code>).</div>
+          </div>
+        </div>
+      </Section>
+
       {/* Updater */}
       <Section icon="download" title="Updates" desc="Auto-updater via GitHub Releases">
         <div className="flex items-center justify-between gap-4">

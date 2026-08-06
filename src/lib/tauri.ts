@@ -96,6 +96,7 @@ export function readHeapMB(): number | null {
 
 let lastOcrSim = '';
 let lastJsonSim = '';
+let lastAiSim = '';
 
 function resolveSimVars(text: string): string {
   return text
@@ -105,6 +106,7 @@ function resolveSimVars(text: string): string {
     .replaceAll('{DOCS_PATH}', 'C:\\Users\\Demo\\Documents')
     .replaceAll('{OCR_TEXT}', lastOcrSim || 'Sample OCR text')
     .replaceAll('{JSON_VALUE}', lastJsonSim || '')
+    .replaceAll('{AI_RESULT}', lastAiSim || 'AI result')
     .replaceAll('{CLIPBOARD}', lastOcrSim || 'clipboard');
 }
 
@@ -161,6 +163,24 @@ export async function executeNode(kind: string, config: Record<string, string>):
         return 'true';
       }
       case 'repeat': return `Loop step (${cfg.count||3})`;
+      case 'ai_prompt': {
+        const prompt = cfg.prompt||'';
+        const resp = `[SIM AI] Prompt: '${prompt.slice(0,60)}' -> Demo AI answer for model ${cfg.model||'llama3.2'} via ${cfg.provider||'auto'} (Ollama local or Vault key)`;
+        lastAiSim = resp;
+        return `AI: ${resp.slice(0,100)}`;
+      }
+      case 'ai_condition': {
+        const isTrue = (cfg.question||'').toLowerCase().includes('total') || (cfg.question||'').includes('> 100');
+        const resp = isTrue ? 'true' : 'false';
+        lastAiSim = resp;
+        return resp;
+      }
+      case 'ai_vision': {
+        const prompt = cfg.prompt||'Describe';
+        const resp = `[SIM Vision] ${prompt.slice(0,60)} -> Simulated image description (install llava: ollama pull llava)`;
+        lastAiSim = resp;
+        return `Vision: ${resp.slice(0,80)}`;
+      }
       default: return 'Simulated';
     }
   }
@@ -250,4 +270,32 @@ export async function checkUpdate(): Promise<string | null> {
   if (!isTauri()) return null;
   const { invoke } = await import('@tauri-apps/api/core');
   try { return await invoke<string | null>('check_update'); } catch { return null; }
+}
+
+export async function getAiConfig(): Promise<[string, string, string, string]> {
+  if (!isTauri()) {
+    try {
+      const p = localStorage.getItem('macroflow.aiProvider') || 'auto';
+      const e = localStorage.getItem('macroflow.aiEndpoint') || 'http://localhost:11434';
+      const m = localStorage.getItem('macroflow.aiModel') || 'llama3.2';
+      const v = localStorage.getItem('macroflow.aiVisionModel') || 'llava';
+      return [p,e,m,v];
+    } catch { return ['auto','http://localhost:11434','llama3.2','llava']; }
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  try { return await invoke<[string,string,string,string]>('get_ai_config'); } catch { return ['auto','http://localhost:11434','llama3.2','llava']; }
+}
+
+export async function setAiConfig(provider: string, endpoint: string, model: string, vision_model: string): Promise<void> {
+  if (!isTauri()) {
+    try {
+      localStorage.setItem('macroflow.aiProvider', provider);
+      localStorage.setItem('macroflow.aiEndpoint', endpoint);
+      localStorage.setItem('macroflow.aiModel', model);
+      localStorage.setItem('macroflow.aiVisionModel', vision_model);
+    } catch {}
+    return;
+  }
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('set_ai_config', { provider, endpoint, model, visionModel: vision_model });
 }

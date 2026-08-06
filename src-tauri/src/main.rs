@@ -10,7 +10,7 @@ use tauri_plugin_store::StoreExt;
 use std::sync::Mutex;
 use sysinfo::System;
 use std::os::windows::process::CommandExt;
-use enigo::{Enigo, Key, KeyboardControllable, MouseButton, MouseControllable};
+use enigo::{Enigo, Settings as EnigoSettings, Key, KeyboardControllable, MouseControllable, MouseButton};
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -18,7 +18,12 @@ struct AppState {
     sys: Mutex<System>,
     last_ocr: Mutex<String>,
     last_json: Mutex<String>,
+    last_ai: Mutex<String>,
     kill_switch: Mutex<String>,
+    ai_provider: Mutex<String>,
+    ai_endpoint: Mutex<String>,
+    ai_model: Mutex<String>,
+    ai_vision_model: Mutex<String>,
 }
 
 fn send_keys_str(enigo: &mut Enigo, keys: &str) {
@@ -93,6 +98,11 @@ fn resolve_variables(text: &str, is_send_keys: bool, state: &tauri::State<AppSta
             result = result.replace("{JSON_VALUE}", &jv);
         }
     }
+    if result.contains("{AI_RESULT}") {
+        if let Ok(ai) = state.last_ai.lock() {
+            result = result.replace("{AI_RESULT}", &ai);
+        }
+    }
     // Vault placeholder: {{vault:key}} -> try keyring
     if result.contains("{{vault:") {
         // extract keys like {{vault:my_api_key}}
@@ -108,6 +118,145 @@ fn resolve_variables(text: &str, is_send_keys: bool, state: &tauri::State<AppSta
         result = out;
     }
     result
+}
+
+// --- AI Hybrid Helper (Ollama local + OpenAI/Anthropic via vault) ---
+fn call_ai_hybrid(prompt: &str, system: Option<&str>, state: &tauri::State<AppState>, config: &std::collections::HashMap<String, String>) -> Result<String, String> {
+    // Determine provider from node config or global state
+    let provider_cfg = config.get("provider").cloned().unwrap_or_else(|| "auto".to_string()).to_lowercase();
+    let global_provider = state.ai_provider.lock().map(|s| s.clone()).unwrap_or_else(|_| "auto".to_string());
+    let provider = if provider_cfg == "auto" { global_provider } else { provider_cfg };
+    let endpoint = config.get("endpoint").cloned().unwrap_or_else(|| state.ai_endpoint.lock().map(|s| s.clone()).unwrap_or_else(|_| "http://localhost:11434".to_string()));
+    let model = config.get("model").cloned().unwrap_or_else(|| state.ai_model.lock().map(|s| s.clone()).unwrap_or_else(|_| "llama3.2".to_string()));
+    let temp: f32 = config.get("temperature").and_then(|s| s.parse().ok()).unwrap_or(0.2);
+
+    // Helper to try Ollama
+    let try_ollama = || -> Result<String, String> {
+        let url = format!("{}/api/chat", endpoint.trim_end_matches('/'));
+        let sys_msg = system.unwrap_or("You are a helpful assistant. Answer concisely.");
+        let body = serde_json::json!({
+            "model": model,
+            "messages": [
+                {"role": "system", "content": sys_msg},
+                {"role": "user", "content": prompt}
+            ],
+            "stream": false,
+            "options": {"temperature": temp}
+        });
+        let client = reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(30)).build().map_err(|e| e.to_string())?;
+        let resp = client.post(&url).json(&body).send().map_err(|e| format!("Ollama not reachable at {}: {}", url, e))?;
+        if !resp.status().is_success() {
+            return Err(format!("Ollama {}: {}", resp.status(), resp.text().unwrap_or_default()));
+        }
+        let v: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+        // Ollama chat returns {message:{content:"..."}}
+        let content = v.get("message").and_then(|m| m.get("content")).and_then(|c| c.as_str())
+            .or_else(|| v.get("response").and_then(|c| c.as_str()))
+            .unwrap_or("").to_string();
+        if content.trim().is_empty() { Err("Ollama empty response".to_string()) } else { Ok(content) }
+    };
+
+    // Helper to try OpenAI
+    let try_openai = || -> Result<String, String> {
+        let key = keyring::Entry::new("macroflow", "openai_api").ok().and_then(|e| e.get_password().ok()).unwrap_or_default();
+        if key.trim().is_empty() { return Err("No OpenAI key in vault (openai_api)".to_string()); }
+        let o_model = if model == "llama3.2" || model == "llava" { "gpt-4o-mini".to_string() } else { model.clone() };
+        let body = serde_json::json!({
+            "model": o_model,
+            "messages": [
+                {"role": "system", "content": system.unwrap_or("You are helpful.")},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": temp
+        });
+        let client = reqwest::blocking::Client::new();
+        let resp = client.post("https://api.openai.com/v1/chat/completions")
+            .bearer_auth(key.trim())
+            .json(&body)
+            .send().map_err(|e| e.to_string())?;
+        if !resp.status().is_success() { return Err(format!("OpenAI {}: {}", resp.status(), resp.text().unwrap_or_default())); }
+        let v: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+        let content = v.get("choices").and_then(|c| c.get(0)).and_then(|c| c.get("message")).and_then(|m| m.get("content")).and_then(|s| s.as_str()).unwrap_or("").to_string();
+        if content.is_empty() { Err("OpenAI empty".to_string()) } else { Ok(content) }
+    };
+
+    // Helper to try Anthropic
+    let try_anthropic = || -> Result<String, String> {
+        let key = keyring::Entry::new("macroflow", "anthropic_api").ok().and_then(|e| e.get_password().ok()).unwrap_or_default();
+        if key.trim().is_empty() { return Err("No Anthropic key in vault (anthropic_api)".to_string()); }
+        let a_model = if model == "llama3.2" { "claude-3-haiku-20240307".to_string() } else { model.clone() };
+        let body = serde_json::json!({
+            "model": a_model,
+            "max_tokens": 512,
+            "system": system.unwrap_or("You are helpful."),
+            "messages": [{"role": "user", "content": prompt}]
+        });
+        let client = reqwest::blocking::Client::new();
+        let resp = client.post("https://api.anthropic.com/v1/messages")
+            .header("x-api-key", key.trim())
+            .header("anthropic-version", "2023-06-01")
+            .json(&body)
+            .send().map_err(|e| e.to_string())?;
+        if !resp.status().is_success() { return Err(format!("Anthropic {}: {}", resp.status(), resp.text().unwrap_or_default())); }
+        let v: serde_json::Value = resp.json().map_err(|e| e.to_string())?;
+        let content = v.get("content").and_then(|c| c.get(0)).and_then(|c| c.get("text")).and_then(|t| t.as_str()).unwrap_or("").to_string();
+        if content.is_empty() { Err("Anthropic empty".to_string()) } else { Ok(content) }
+    };
+
+    // Provider selection: auto tries Ollama -> OpenAI -> Anthropic
+    match provider.as_str() {
+        "ollama" => try_ollama(),
+        "openai" => try_openai(),
+        "anthropic" => try_anthropic(),
+        _ => {
+            // auto: try Ollama first, then OpenAI, then Anthropic, then simulated
+            if let Ok(r) = try_ollama() { return Ok(r); }
+            if let Ok(r) = try_openai() { return Ok(r); }
+            if let Ok(r) = try_anthropic() { return Ok(r); }
+            // Final simulated fallback (good enough for demo without keys/Ollama)
+            Ok(format!("[SIM AI] Prompt: '{}' -> Demo response: This is a high-quality simulated AI answer for '{}' (install Ollama or add OpenAI key in Vault for real).", prompt.chars().take(60).collect::<String>(), model))
+        }
+    }
+}
+
+fn call_ai_vision_hybrid(image_path: &str, prompt: &str, state: &tauri::State<AppState>, config: &std::collections::HashMap<String, String>) -> Result<String, String> {
+    let provider_cfg = config.get("provider").cloned().unwrap_or_else(|| "auto".to_string()).to_lowercase();
+    let global_provider = state.ai_provider.lock().map(|s| s.clone()).unwrap_or_else(|_| "auto".to_string());
+    let provider = if provider_cfg == "auto" { global_provider } else { provider_cfg };
+    // For vision, Ollama uses llava, OpenAI uses gpt-4o
+    let vision_model = config.get("model").cloned().unwrap_or_else(|| state.ai_vision_model.lock().map(|s| s.clone()).unwrap_or_else(|_| "llava".to_string()));
+    // If Ollama explicitly or auto, try Ollama vision
+    if provider == "ollama" || provider == "auto" {
+        // Read image as base64 for Ollama vision (llava expects base64)
+        if let Ok(bytes) = std::fs::read(image_path) {
+            use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+            let b64 = BASE64.encode(&bytes);
+            let endpoint = config.get("endpoint").cloned().unwrap_or_else(|| state.ai_endpoint.lock().map(|s| s.clone()).unwrap_or_else(|_| "http://localhost:11434".to_string()));
+            let url = format!("{}/api/chat", endpoint.trim_end_matches('/'));
+            let body = serde_json::json!({
+                "model": vision_model,
+                "messages": [{"role": "user", "content": prompt, "images": [b64]}],
+                "stream": false
+            });
+            if let Ok(client) = reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(30)).build() {
+                if let Ok(resp) = client.post(&url).json(&body).send() {
+                    if resp.status().is_success() {
+                        if let Ok(v) = resp.json::<serde_json::Value>() {
+                            if let Some(content) = v.get("message").and_then(|m| m.get("content")).and_then(|c| c.as_str()) {
+                                if !content.trim().is_empty() { return Ok(content.to_string()); }
+                            }
+                        }
+                    }
+                }
+            }
+            if provider == "ollama" {
+                // if explicitly ollama and failed, return simulated
+                return Ok(format!("[SIM Vision] {} -> Simulated description of image at {} (install llava: ollama pull llava)", prompt, image_path));
+            }
+        }
+    }
+    // Fallback to text AI with prompt that includes image path
+    call_ai_hybrid(&format!("{} [Image: {}]", prompt, image_path), Some("You are a vision assistant. Describe the image."), state, config)
 }
 
 #[tauri::command]
@@ -429,6 +578,34 @@ try {{
             let now_str = chrono::Local::now().format("%H:%M %Y-%m-%d").to_string();
             Ok(format!("AtTime cron '{}' checked at {}", cron, now_str))
         }
+        "ai_prompt" => {
+            let prompt = config.get("prompt").cloned().unwrap_or_default();
+            let res = call_ai_hybrid(&prompt, None, &state, &config)?;
+            if let Ok(mut a) = state.last_ai.lock() { *a = res.clone(); }
+            Ok(format!("AI: {}", res.chars().take(500).collect::<String>()))
+        }
+        "ai_condition" => {
+            let question = config.get("question").cloned().unwrap_or_default();
+            let res = call_ai_hybrid(&question, Some("Answer only with true or false. No explanation."), &state, &config)?;
+            let is_true = res.trim().to_lowercase().starts_with("true");
+            if let Ok(mut a) = state.last_ai.lock() { *a = res.clone(); }
+            if is_true { Ok("true".to_string()) } else { Ok("false".to_string()) }
+        }
+        "ai_vision" => {
+            let prompt = config.get("prompt").cloned().unwrap_or_else(|| "Describe this image".to_string());
+            let temp_dir = std::env::var("TEMP").unwrap_or_else(|_| "C:\\Windows\\Temp".to_string());
+            let temp_path = format!("{}\\macroflow_ocr.png", temp_dir);
+            if !std::path::Path::new(&temp_path).exists() {
+                if let Ok(screens) = screenshots::Screen::all() {
+                    if let Some(screen) = screens.first() {
+                        if let Ok(img) = screen.capture() { let _ = img.save(&temp_path); }
+                    }
+                }
+            }
+            let res = call_ai_vision_hybrid(&temp_path, &prompt, &state, &config)?;
+            if let Ok(mut a) = state.last_ai.lock() { *a = res.clone(); }
+            Ok(format!("Vision: {}", res.chars().take(500).collect::<String>()))
+        }
         _ => Ok("Simulated (Not fully implemented yet)".into())
     }
 }
@@ -516,6 +693,24 @@ fn set_kill_switch(state: tauri::State<AppState>, app: tauri::AppHandle, shortcu
 }
 
 #[tauri::command]
+fn get_ai_config(state: tauri::State<AppState>) -> (String, String, String, String) {
+    let p = state.ai_provider.lock().map(|s| s.clone()).unwrap_or_else(|_| "auto".to_string());
+    let e = state.ai_endpoint.lock().map(|s| s.clone()).unwrap_or_else(|_| "http://localhost:11434".to_string());
+    let m = state.ai_model.lock().map(|s| s.clone()).unwrap_or_else(|_| "llama3.2".to_string());
+    let v = state.ai_vision_model.lock().map(|s| s.clone()).unwrap_or_else(|_| "llava".to_string());
+    (p, e, m, v)
+}
+
+#[tauri::command]
+fn set_ai_config(state: tauri::State<AppState>, provider: String, endpoint: String, model: String, vision_model: String) -> Result<(), String> {
+    if let Ok(mut p) = state.ai_provider.lock() { *p = provider; }
+    if let Ok(mut e) = state.ai_endpoint.lock() { *e = endpoint; }
+    if let Ok(mut m) = state.ai_model.lock() { *m = model; }
+    if let Ok(mut v) = state.ai_vision_model.lock() { *v = vision_model; }
+    Ok(())
+}
+
+#[tauri::command]
 async fn check_update(app: tauri::AppHandle) -> Result<Option<String>, String> {
     // Use updater plugin if available
     #[cfg(feature = "updater")]
@@ -550,7 +745,12 @@ fn main() {
             sys: Mutex::new(sys),
             last_ocr: Mutex::new(String::new()),
             last_json: Mutex::new(String::new()),
+            last_ai: Mutex::new(String::new()),
             kill_switch: Mutex::new(kill_switch_default.clone()),
+            ai_provider: Mutex::new("auto".to_string()),
+            ai_endpoint: Mutex::new("http://localhost:11434".to_string()),
+            ai_model: Mutex::new("llama3.2".to_string()),
+            ai_vision_model: Mutex::new("llava".to_string()),
         })
         .plugin(
             ShortcutBuilder::new()
@@ -602,7 +802,7 @@ fn main() {
                 .build(app)?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![execute_node, get_system_stats, open_url, export_flow, store_secret, get_secret, delete_secret, get_kill_switch, set_kill_switch, check_update])
+        .invoke_handler(tauri::generate_handler![execute_node, get_system_stats, open_url, export_flow, store_secret, get_secret, delete_secret, get_kill_switch, set_kill_switch, check_update, get_ai_config, set_ai_config])
         .run(tauri::generate_context!())
         .expect("error while running MacroFlow");
 }

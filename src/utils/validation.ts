@@ -120,6 +120,19 @@ export function validateNode(node: FlowNode, edges: FlowEdge[], allNodes: FlowNo
       break;
     }
     case 'lock_pc': break;
+    case 'ai_prompt': {
+      if (isEmpty(cfg.prompt)) issues.push({ level: 'error', msg: 'prompt required' });
+      break;
+    }
+    case 'ai_condition': {
+      if (isEmpty(cfg.question)) issues.push({ level: 'error', msg: 'question required' });
+      if (!cfg.then && !cfg.else) issues.push({ level: 'warn', msg: 'no branches' });
+      break;
+    }
+    case 'ai_vision': {
+      if (isEmpty(cfg.prompt)) issues.push({ level: 'error', msg: 'prompt required' });
+      break;
+    }
     default: break;
   }
 
