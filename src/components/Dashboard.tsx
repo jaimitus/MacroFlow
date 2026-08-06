@@ -169,8 +169,8 @@ export default function Dashboard(p: DashboardProps) {
                   <div className="min-w-0 flex-1">
                     {isRenaming ? (
                       <div className="space-y-1.5">
-                        <input value={renameName} onChange={e=> setRenameName(e.target.value)} onKeyDown={e=> e.key==='Enter' && commitRename()} placeholder="Flow name" className="w-full text-[12.5px] font-semibold border border-brand rounded-md px-2 py-1 bg-surface text-ink outline-none" autoFocus />
-                        <input value={renameDesc} onChange={e=> setRenameDesc(e.target.value)} onKeyDown={e=> e.key==='Enter' && commitRename()} placeholder="Description" className="w-full text-[11px] border border-line rounded-md px-2 py-1 bg-surface text-ink-2 outline-none" />
+                        <input value={renameName} onChange={e=> setRenameName(e.target.value)} onKeyDown={e=> { if(e.key==='Enter') commitRename(); if(e.key==='Escape') setRenameId(null);}} placeholder="Flow name" className="w-full text-[12.5px] font-semibold border border-brand rounded-md px-2 py-1 bg-surface text-ink outline-none" autoFocus />
+                        <input value={renameDesc} onChange={e=> setRenameDesc(e.target.value)} onKeyDown={e=> { if(e.key==='Enter') commitRename(); if(e.key==='Escape') setRenameId(null);}} placeholder="Description" className="w-full text-[11px] border border-line rounded-md px-2 py-1 bg-surface text-ink-2 outline-none" />
                         <div className="flex gap-1.5">
                           <button onClick={commitRename} className="text-[11px] bg-brand text-white px-2.5 py-1 rounded-md font-semibold">Save</button>
                           <button onClick={()=> setRenameId(null)} className="text-[11px] bg-elevated border border-line px-2.5 py-1 rounded-md">Cancel</button>

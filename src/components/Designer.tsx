@@ -33,6 +33,7 @@ export interface DesignerProps {
   onAutoLayout: () => void;
   onDuplicateFlow: (id: string) => void;
   onRenameFlow: (id: string, name: string, desc?: string) => void;
+  onDragStateChange?: (dragging: boolean) => void;
 }
 
 const NODE_W = 168;
@@ -65,6 +66,8 @@ export default function Designer(p: DesignerProps) {
   const [flowRenaming, setFlowRenaming] = useState(false);
   const [renameName, setRenameName] = useState('');
   const [renameDesc, setRenameDesc] = useState('');
+  const [scrollPos, setScrollPos] = useState({ left: 0, top: 0 });
+  const [showHelp, setShowHelp] = useState(false);
 
   const selected = p.nodes.find((n) => n.id === p.selectedNodeId) ?? null;
   const currentFlow = p.flows.find(f=>f.id===p.flowId) ?? p.flows[0];
@@ -98,29 +101,41 @@ export default function Designer(p: DesignerProps) {
         e.preventDefault();
         const delta = -e.deltaY * 0.001;
         setZoom(z => Math.min(1.8, Math.max(0.4, +(z + delta).toFixed(2))));
-      } else {
-        // horizontal scroll via vertical wheel if not already scrolling vertically? Keep default vertical scroll, add horizontal nudge
-        if (e.deltaY !== 0 && Math.abs(e.deltaX) < Math.abs(e.deltaY)) {
-          // allow shift+wheel to pan horizontally already, but without ctrl we just do slight horizontal
-          // we don't prevent default, just add small horizontal shift for discoverability
-        }
       }
     };
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
   }, []);
 
-  // Keyboard: Ctrl+K, Delete, Ctrl+D
+  // Minimap viewport sync
+  useEffect(()=>{
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const onScroll = () => setScrollPos({ left: el.scrollLeft, top: el.scrollTop });
+    el.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return ()=> el.removeEventListener('scroll', onScroll);
+  }, [zoom]);
+
+  // Keyboard: Ctrl+K, Delete, Ctrl+D, ?, Esc
   useEffect(()=>{
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const isInput = target && (target.tagName==='INPUT'||target.tagName==='TEXTAREA'|| target.isContentEditable);
       if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k') {
         e.preventDefault(); setShowCommandPalette(v=>!v);
+        return;
+      }
+      if (!isInput && e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault(); setShowHelp(v=>!v);
+        return;
+      }
+      if (e.key === 'Escape' && showHelp) {
+        setShowHelp(false);
+        return;
       }
       if (!isInput && (e.key==='Delete' || e.key==='Backspace')) {
         if (p.selectedIds.length>0) {
-          // avoid deleting when focus is inspector input (isInput already false)
           const ids = new Set(p.selectedIds);
           if (p.selectedNodeId) ids.add(p.selectedNodeId);
           if (ids.size>0 && confirm(`Delete ${ids.size} node(s)?`)) {
@@ -133,13 +148,10 @@ export default function Designer(p: DesignerProps) {
           setSelectedEdge(null);
         }
       }
-      if (!isInput && e.ctrlKey && e.key.toLowerCase()==='d' && p.selectedNodeId) {
-        // handled in App, but also here for completeness
-      }
     };
     window.addEventListener('keydown', onKey);
     return ()=> window.removeEventListener('keydown', onKey);
-  }, [p]);
+  }, [p, showHelp, selectedEdge]);
 
   const handleCanvasMove = (e: ReactMouseEvent<HTMLDivElement>) => {
     // panning
@@ -240,6 +252,34 @@ export default function Designer(p: DesignerProps) {
   const canvasWidth = Math.max(2800, ...p.nodes.map((n) => n.x + 400));
   const canvasHeight = Math.max(750, ...p.nodes.map((n) => n.y + 250));
 
+  const handleFitView = () => {
+    if (p.nodes.length === 0) return;
+    const minX = Math.min(...p.nodes.map(n=>n.x));
+    const minY = Math.min(...p.nodes.map(n=>n.y));
+    const maxX = Math.max(...p.nodes.map(n=>n.x + NODE_W));
+    const maxY = Math.max(...p.nodes.map(n=>n.y + NODE_H));
+    const pad = 80;
+    const contentW = maxX - minX + pad*2;
+    const contentH = maxY - minY + pad*2;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const availW = container.clientWidth;
+    const availH = container.clientHeight;
+    const scaleX = availW / contentW;
+    const scaleY = availH / contentH;
+    const newZoom = Math.min(1.8, Math.max(0.4, Math.min(scaleX, scaleY)));
+    setZoom(+newZoom.toFixed(2));
+    requestAnimationFrame(()=>{
+      setTimeout(()=>{
+        if (!scrollContainerRef.current) return;
+        const centerX = (minX + maxX)/2 * newZoom;
+        const centerY = (minY + maxY)/2 * newZoom;
+        scrollContainerRef.current!.scrollLeft = centerX - availW/2;
+        scrollContainerRef.current!.scrollTop = centerY - availH/2;
+      }, 60);
+    });
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
@@ -268,8 +308,8 @@ export default function Designer(p: DesignerProps) {
           </select>
           {flowRenaming ? (
             <div className="flex items-center gap-1">
-              <input value={renameName} onChange={e=> setRenameName(e.target.value)} onKeyDown={e=> e.key==='Enter' && (()=>{ p.onRenameFlow(p.flowId, renameName, renameDesc); setFlowRenaming(false); })()} placeholder="Name" className="text-[11px] border border-brand rounded-lg px-2 py-1 bg-surface w-[140px]" autoFocus />
-              <input value={renameDesc} onChange={e=> setRenameDesc(e.target.value)} onKeyDown={e=> e.key==='Enter' && (()=>{ p.onRenameFlow(p.flowId, renameName, renameDesc); setFlowRenaming(false); })()} placeholder="Desc" className="hidden lg:block text-[11px] border border-line rounded-lg px-2 py-1 bg-surface w-[160px]" />
+              <input value={renameName} onChange={e=> setRenameName(e.target.value)} onKeyDown={e=> { if (e.key==='Enter'){ p.onRenameFlow(p.flowId, renameName, renameDesc); setFlowRenaming(false);} if (e.key==='Escape') setFlowRenaming(false); }} placeholder="Name" className="text-[11px] border border-brand rounded-lg px-2 py-1 bg-surface w-[140px]" autoFocus />
+              <input value={renameDesc} onChange={e=> setRenameDesc(e.target.value)} onKeyDown={e=> { if (e.key==='Enter'){ p.onRenameFlow(p.flowId, renameName, renameDesc); setFlowRenaming(false);} if (e.key==='Escape') setFlowRenaming(false); }} placeholder="Desc" className="hidden lg:block text-[11px] border border-line rounded-lg px-2 py-1 bg-surface w-[160px]" />
               <button onClick={()=> { p.onRenameFlow(p.flowId, renameName, renameDesc); setFlowRenaming(false); }} className="text-[11px] bg-brand text-white px-2.5 py-1 rounded-lg">Save</button>
               <button onClick={()=> setFlowRenaming(false)} className="text-[11px] border border-line px-2.5 py-1 rounded-lg">Cancel</button>
             </div>
@@ -305,10 +345,14 @@ export default function Designer(p: DesignerProps) {
           <button onClick={p.onAutoLayout} title="Auto-layout" className="flex items-center gap-1.5 bg-surface border border-line hover:bg-brand/10 hover:border-brand/40 text-ink-2 hover:text-brand text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors">
             <Icon name="nodes" size={11} /> <span className="hidden sm:inline">Ordenar</span>
           </button>
+          <button onClick={handleFitView} title="Fit view" className="hidden sm:grid w-7 h-7 place-items-center rounded-lg border border-line bg-surface hover:bg-brand/10 hover:text-brand text-ink-2">
+            <Icon name="move" size={12} />
+          </button>
           <div className="w-px h-6 bg-line mx-1 hidden md:block" />
           <button onClick={()=> setShowMinimap(v=>!v)} title="Toggle minimap" className={`w-7 h-7 grid place-items-center rounded-lg border ${showMinimap? 'bg-brand text-white border-brand' : 'bg-surface border-line text-ink-2'} `}>
             <Icon name="monitor" size={12} />
           </button>
+          <button onClick={()=> setShowHelp(v=>!v)} title="Atajos" className={`w-7 h-7 grid place-items-center rounded-lg border text-[11px] font-black ${showHelp? 'bg-brand text-white border-brand':'bg-surface border-line text-ink-2 hover:bg-elevated'}`}>?</button>
           <button onClick={() => p.onExportFlow(p.flowId)} className="flex items-center gap-1.5 bg-surface border border-line hover:bg-brand/10 hover:border-brand/40 text-ink-2 hover:text-brand text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-colors" title="Export this flow">
             <Icon name="upload" size={11} /> <span className="hidden sm:inline">Export</span>
           </button>
@@ -376,11 +420,11 @@ export default function Designer(p: DesignerProps) {
             ref={canvasRef}
             onMouseMove={handleCanvasMove}
             onMouseUp={() => {
+              if (dragId) p.onDragStateChange?.(false);
               setDragId(null);
               dragOffsets.current.clear();
               dragStartPositions.current.clear();
               if (isBoxSelecting && selectionBox) {
-                // select nodes intersecting box
                 const sel = p.nodes.filter(n=>{
                   const nx = n.x, ny = n.y;
                   return nx < selectionBox.x + selectionBox.w && nx + NODE_W > selectionBox.x && ny < selectionBox.y + selectionBox.h && ny + NODE_H > selectionBox.y;
@@ -394,7 +438,7 @@ export default function Designer(p: DesignerProps) {
               setSelectionBox(null);
               setIsPanning(false);
             }}
-            onMouseLeave={() => { setDragId(null); setIsPanning(false); setIsBoxSelecting(false); setSelectionBox(null); }}
+            onMouseLeave={() => { if (dragId) p.onDragStateChange?.(false); setDragId(null); setIsPanning(false); setIsBoxSelecting(false); setSelectionBox(null); }}
             onMouseDown={(e)=>{
               // middle mouse or left on background starts pan or box select
               if (e.button===1) { // middle
@@ -444,7 +488,7 @@ export default function Designer(p: DesignerProps) {
           >
             {/* Grid snap visualization */}
             {snapEnabled && (
-              <div className="absolute inset-0 pointer-events-none opacity-[0.025]" style={{ backgroundImage: `linear-gradient(to right, var(--color-ink) 1px, transparent 1px), linear-gradient(to bottom, var(--color-ink) 1px, transparent 1px)`, backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px` }} />
+              <div className="absolute inset-0 pointer-events-none opacity-[0.045]" style={{ backgroundImage: `linear-gradient(to right, var(--color-ink) 1px, transparent 1px), linear-gradient(to bottom, var(--color-ink) 1px, transparent 1px)`, backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px` }} />
             )}
             <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ width: canvasWidth, height: canvasHeight }}>
             {p.edges.map((e, i) => {
@@ -551,6 +595,7 @@ export default function Designer(p: DesignerProps) {
                   }
                   setSelectedEdge(null);
                   setDragId(n.id);
+                  p.onDragStateChange?.(true);
                   // remember offsets for all selected + primary
                   const idsToTrack = (e.shiftKey ? (p.selectedIds.includes(n.id) ? p.selectedIds : [...p.selectedIds, n.id]) : (p.selectedIds.includes(n.id) && p.selectedIds.length>1 ? p.selectedIds : [n.id]));
                   dragStartPositions.current = new Map();
@@ -681,11 +726,11 @@ export default function Designer(p: DesignerProps) {
                 const isSel = p.selectedIds.includes(n.id) || p.selectedNodeId===n.id;
                 return <div key={n.id} className={`absolute w-1.5 h-1.5 rounded-sm ${isSel? 'bg-brand ring-1 ring-brand' : ''}`} style={{ left: `${nx}%`, top: `${ny}%`, background: isSel? 'var(--color-brand)' : n.color }} />;
               })}
-              {/* viewport rect */}
+              {/* viewport rect - synced via scrollPos */}
               <div className="absolute border border-brand/60 bg-brand/10 pointer-events-none"
                 style={{
-                  left: `${( (scrollContainerRef.current?.scrollLeft||0) / (canvasWidth*zoom))*100}%`,
-                  top: `${( (scrollContainerRef.current?.scrollTop||0) / (canvasHeight*zoom))*100}%`,
+                  left: `${( scrollPos.left / (canvasWidth*zoom))*100}%`,
+                  top: `${( scrollPos.top / (canvasHeight*zoom))*100}%`,
                   width: `${ Math.min(100, ( (scrollContainerRef.current?.clientWidth||400) / (canvasWidth*zoom))*100 )}%`,
                   height: `${ Math.min(100, ( (scrollContainerRef.current?.clientHeight||300) / (canvasHeight*zoom))*100 )}%`,
                 }}
@@ -805,6 +850,29 @@ export default function Designer(p: DesignerProps) {
         </div>
       </div>
 
+      {showHelp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-ink/30 backdrop-blur-[2px]" onClick={()=> setShowHelp(false)} />
+          <div className="relative bg-surface rounded-2xl shadow-pop border border-line w-full max-w-[480px] p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14px] font-bold text-ink flex items-center gap-2"><Icon name="info" size={16}/> Atajos Designer</h3>
+              <button onClick={()=> setShowHelp(false)} className="w-7 h-7 grid place-items-center rounded-full hover:bg-elevated text-ink-2"><Icon name="x" size={14}/></button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+Z / Ctrl+Y</kbd><span className="text-ink-2">Undo / Redo</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+K</kbd><span className="text-ink-2">Command palette</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Shift+Click</kbd><span className="text-ink-2">Multi-select</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Arrastrar fondo</kbd><span className="text-ink-2">Box select</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+C / V</kbd><span className="text-ink-2">Copiar / Pegar</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+D</kbd><span className="text-ink-2">Duplicar nodo</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Del</kbd><span className="text-ink-2">Borrar</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+Wheel</kbd><span className="text-ink-2">Zoom</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Middle-drag</kbd><span className="text-ink-2">Pan</span>
+            </div>
+            <div className="text-[10px] text-ink-3 text-center border-t border-line pt-3">Arrastra puertos para conectar · Click en edge para borrar · Grid snap 20px · ? para cerrar</div>
+          </div>
+        </div>
+      )}
       <CommandPalette open={showCommandPalette} onClose={()=> setShowCommandPalette(false)} onAddNode={p.onAddNode} onAutoLayout={p.onAutoLayout} onUndo={p.onUndo} onRedo={p.onRedo} onDuplicateFlow={()=> p.onDuplicateFlow(p.flowId)} />
     </div>
   );

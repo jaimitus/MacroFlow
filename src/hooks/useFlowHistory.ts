@@ -3,7 +3,6 @@ import type { Flow } from '../types';
 
 const MAX_HISTORY = 60;
 
-// Deep clone via JSON - flows are simple POJOs
 function cloneFlows(flows: Flow[]): Flow[] {
   return JSON.parse(JSON.stringify(flows));
 }
@@ -14,6 +13,8 @@ export function useFlowHistory(initial: Flow[]) {
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const isApplyingRef = useRef(false);
+  const isPausedRef = useRef(false);
+  const pendingRef = useRef<Flow[] | null>(null);
 
   const syncFlags = useCallback(() => {
     setCanUndo(indexRef.current > 0);
@@ -22,17 +23,17 @@ export function useFlowHistory(initial: Flow[]) {
 
   const push = useCallback((nextFlows: Flow[]) => {
     if (isApplyingRef.current) return;
+    if (isPausedRef.current) {
+      pendingRef.current = cloneFlows(nextFlows);
+      return;
+    }
     const cloned = cloneFlows(nextFlows);
-    // Avoid pushing identical snapshot
     const curr = historyRef.current[indexRef.current];
     if (JSON.stringify(curr) === JSON.stringify(cloned)) return;
-
-    // Truncate future
     const sliced = historyRef.current.slice(0, indexRef.current + 1);
     sliced.push(cloned);
     if (sliced.length > MAX_HISTORY) {
       sliced.shift();
-      // keep index at last
       historyRef.current = sliced;
       indexRef.current = sliced.length - 1;
     } else {
@@ -48,7 +49,6 @@ export function useFlowHistory(initial: Flow[]) {
     indexRef.current -= 1;
     const snapshot = cloneFlows(historyRef.current[indexRef.current]);
     syncFlags();
-    // release flag next tick
     setTimeout(() => { isApplyingRef.current = false; }, 0);
     return snapshot;
   }, [syncFlags]);
@@ -65,5 +65,21 @@ export function useFlowHistory(initial: Flow[]) {
 
   const isApplying = useCallback(() => isApplyingRef.current, []);
 
-  return { push, undo, redo, canUndo, canRedo, isApplying, historyRef, indexRef };
+  const pause = useCallback(() => {
+    isPausedRef.current = true;
+    pendingRef.current = null;
+  }, []);
+
+  const resume = useCallback(() => {
+    isPausedRef.current = false;
+    if (pendingRef.current) {
+      const toPush = pendingRef.current;
+      pendingRef.current = null;
+      push(toPush);
+    }
+  }, [push]);
+
+  const isPaused = useCallback(() => isPausedRef.current, []);
+
+  return { push, undo, redo, canUndo, canRedo, isApplying, pause, resume, isPaused, historyRef, indexRef };
 }

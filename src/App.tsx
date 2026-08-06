@@ -447,6 +447,11 @@ export default function App() {
     appendLog('info', '[layout] auto-arranged');
   }, [flows, flowId, setFlows, appendLog]);
 
+  const handleDragStateChange = useCallback((dragging: boolean)=>{
+    if (dragging) history.pause();
+    else history.resume();
+  }, [history]);
+
   const runFlow = useCallback(async (overrideFlowId?: string) => {
     if (executingRef.current) return;
     const targetFlow = overrideFlowId ? flows.find(f => f.id === overrideFlowId) : flow;
@@ -755,6 +760,7 @@ export default function App() {
                     onAutoLayout={handleAutoLayout}
                     onDuplicateFlow={handleDuplicateFlow}
                     onRenameFlow={handleRenameFlow}
+                    onDragStateChange={handleDragStateChange}
                   />
                 )}
                 {activeTab === 'settings' && (
