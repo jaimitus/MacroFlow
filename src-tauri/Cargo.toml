@@ -1,0 +1,31 @@
+[package]
+name = "macroflow"
+version = "1.4.2"
+description = "Low-latency Windows automation engine (visual AutoHotkey alternative)"
+authors = ["MacroFlow"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "macroflow_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# Tauri uses the system WebView2 (already on Windows 11) instead of shipping a
+# whole Chromium, which is what keeps the memory footprint and binary tiny.
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# ── Aggressive size + memory optimization for the shipped .exe ──
+[profile.release]
+opt-level = "s"      # optimize for size; use "z" to squeeze harder
+lto = true           # link-time optimization removes dead code across crates
+codegen-units = 1    # better optimization at the cost of compile time
+panic = "abort"      # no unwinding tables → smaller binary, less RAM
+strip = true         # strip symbols from the final binary
+incremental = false

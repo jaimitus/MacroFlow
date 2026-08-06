@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Semantic color tokens (light theme is the default) ──
+   These generate utilities like bg-surface, text-ink, border-line, etc.
+   The .dark block below re-points the same variables, so every component
+   switches theme without a single dark: variant. */
+@theme {
+  --color-canvas: #eef0f4;
+  --color-surface: #ffffff;
+  --color-elevated: #f6f7f9;
+  --color-line: #e4e6ec;
+  --color-line-strong: #d4d7df;
+  --color-ink: #1a1b1e;
+  --color-ink-2: #565a63;
+  --color-ink-3: #8a8f99;
+  --color-brand: #0067c0;
+  --color-brand-strong: #0078d4;
+  --color-brand-fg: #ffffff;
+  --color-success: #107c3a;
+  --color-danger: #d42a37;
+  --color-warn: #b7791f;
+
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --shadow-pop: 0 12px 32px rgba(16, 24, 40, 0.14);
+  --shadow-window: 0 40px 90px rgba(20, 28, 45, 0.28), 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.dark {
+  --color-canvas: #131417;
+  --color-surface: #1e1f24;
+  --color-elevated: #26272e;
+  --color-line: #32343c;
+  --color-line-strong: #3f424c;
+  --color-ink: #eef0f3;
+  --color-ink-2: #a6abb5;
+  --color-ink-3: #6d727c;
+  --color-brand: #4cc2ff;
+  --color-brand-strong: #38a9ee;
+  --color-brand-fg: #06121c;
+  --color-success: #40c463;
+  --color-danger: #f0575d;
+  --color-warn: #e2a53a;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 14px 36px rgba(0, 0, 0, 0.55);
+  --shadow-window: 0 40px 100px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", Inter, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+.font-mono,
+pre,
+code,
+kbd {
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, "SF Mono", monospace;
+}
+
+/* Slim Windows 11 style scrollbars */
+.custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-ink-3) 45%, transparent);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-ink-3) 70%, transparent);
+  background-clip: content-box;
+}
+
+/* Window backdrop (mica-ish) */
+.app-backdrop {
+  background:
+    radial-gradient(1200px 500px at 12% -10%, color-mix(in srgb, var(--color-brand) 14%, transparent), transparent 60%),
+    radial-gradient(1000px 600px at 112% 8%, color-mix(in srgb, #8764b8 16%, transparent), transparent 55%),
+    var(--color-canvas);
+}
+
+.dot-grid {
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--color-ink-3) 32%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Animations */
+@keyframes dash-flow { to { stroke-dashoffset: -24; } }
+.edge-running { animation: dash-flow 0.7s linear infinite; }
+
+@keyframes kill-flash {
+  0% { opacity: 0; transform: scale(0.96); }
+  12% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+.kill-flash { animation: kill-flash 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+@keyframes node-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand) 40%, transparent); }
+  50% { box-shadow: 0 0 0 7px transparent; }
+}
+.node-running { animation: node-pulse 1s ease-out infinite; }
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise-in { animation: rise-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }

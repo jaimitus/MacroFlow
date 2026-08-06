@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MacroFlow",
+  "version": "1.4.2",
+  "identifier": "dev.macroflow.engine",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "MacroFlow",
+        "width": 1320,
+        "height": 880,
+        "minWidth": 900,
+        "minHeight": 600,
+        "resizable": true,
+        "decorations": false,
+        "transparent": false,
+        "center": true,
+        "visible": true,
+        "shadow": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:"
+    },
+    "trayIcon": {
+      "id": "main",
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": false,
+      "tooltip": "MacroFlow — engine idle",
+      "menuOnLeftClick": false
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
+      "nsis": {
+        "installMode": "currentUser",
+        "compression": "lzma",
+        "languages": ["English", "Spanish"]
+      },
+      "allowDowngrades": true
+    },
+    "resources": [],
+    "copyright": "© 2026 MacroFlow",
+    "category": "Productivity",
+    "shortDescription": "Low-latency visual automation engine for Windows",
+    "longDescription": "A resident, tray-based automation launcher (visual AutoHotkey alternative). Global hooks, a visual node graph, and a global kill switch — with a tiny memory footprint via the system WebView2."
+  },
+  "plugins": {
+    "global-shortcut": {}
+  }
+}
