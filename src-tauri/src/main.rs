@@ -85,7 +85,7 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
         "send_keys" => {
             let keys = config.get("keys").cloned().unwrap_or_default();
             let script = format!(
-                "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('{}')",
+                "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::Send('{}')",
                 keys.replace("'", "''").replace("{CLIPBOARD}", "^v")
             );
             let _ = std::process::Command::new("powershell")
