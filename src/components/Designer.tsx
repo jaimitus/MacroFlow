@@ -110,9 +110,9 @@ export default function Designer(p: DesignerProps) {
         </div>
       </div>
 
-      <div className="flex flex-1 min-h-[460px]">
+      <div className="flex flex-1 min-h-[460px] min-w-0 overflow-hidden">
         {/* Palette */}
-        <div className="w-[164px] bg-elevated border-r border-line p-2 space-y-1.5 overflow-auto custom-scrollbar hidden md:block">
+        <div className="w-[164px] bg-elevated border-r border-line p-2 space-y-1.5 overflow-auto custom-scrollbar hidden md:block shrink-0">
           <div className="text-[9.5px] font-bold tracking-[0.14em] text-ink-3 px-1 pt-1">TRIGGERS</div>
           {PALETTE.filter((x) => x.cat === 'trigger').map((x) => (
             <PaletteButton key={x.kind} item={x} onAdd={() => p.onAddNode(x.kind)} />
@@ -124,7 +124,7 @@ export default function Designer(p: DesignerProps) {
         </div>
 
         {/* Canvas Scroll Container */}
-        <div className="flex-1 relative overflow-auto custom-scrollbar bg-canvas select-none">
+        <div className="flex-1 min-w-0 h-full relative overflow-auto custom-scrollbar bg-canvas select-none">
           <div
             ref={canvasRef}
             onMouseMove={handleCanvasMove}
@@ -137,10 +137,10 @@ export default function Designer(p: DesignerProps) {
               }
             }}
             style={{
-              minWidth: `${Math.max(2600, ...p.nodes.map((n) => n.x + 350))}px`,
-              minHeight: `${Math.max(900, ...p.nodes.map((n) => n.y + 250))}px`,
+              width: `${Math.max(2800, ...p.nodes.map((n) => n.x + 400))}px`,
+              height: `${Math.max(1200, ...p.nodes.map((n) => n.y + 300))}px`,
             }}
-            className="relative dot-grid w-full h-full min-h-full"
+            className="relative dot-grid"
           >
             <svg className="absolute inset-0 w-full h-full pointer-events-none">
             {p.edges.map((e, i) => {
