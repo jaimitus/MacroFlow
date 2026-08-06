@@ -10,11 +10,54 @@ use tauri_plugin_global_shortcut::{Builder as ShortcutBuilder, ShortcutState};
 use std::sync::Mutex;
 use sysinfo::System;
 use std::os::windows::process::CommandExt;
+use enigo::{Enigo, Key, KeyboardControllable};
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 struct AppState {
     sys: Mutex<System>,
+}
+
+fn send_keys_str(enigo: &mut Enigo, keys: &str) {
+    let mut current_literal = String::new();
+    let mut in_bracket = false;
+    let mut bracket_content = String::new();
+
+    for c in keys.chars() {
+        if c == '{' {
+            if !current_literal.is_empty() {
+                enigo.key_sequence(&current_literal);
+                current_literal.clear();
+            }
+            in_bracket = true;
+        } else if c == '}' && in_bracket {
+            match bracket_content.as_str() {
+                "ENTER" => enigo.key_click(Key::Return),
+                "TAB" => enigo.key_click(Key::Tab),
+                "SPACE" => enigo.key_click(Key::Space),
+                "BACKSPACE" => enigo.key_click(Key::Backspace),
+                "ESC" => enigo.key_click(Key::Escape),
+                "UP" => enigo.key_click(Key::UpArrow),
+                "DOWN" => enigo.key_click(Key::DownArrow),
+                "LEFT" => enigo.key_click(Key::LeftArrow),
+                "RIGHT" => enigo.key_click(Key::RightArrow),
+                _ => {
+                    enigo.key_sequence(&format!("{{{}}}", bracket_content));
+                }
+            }
+            bracket_content.clear();
+            in_bracket = false;
+        } else {
+            if in_bracket {
+                bracket_content.push(c);
+            } else {
+                current_literal.push(c);
+            }
+        }
+    }
+    if !current_literal.is_empty() {
+        enigo.key_sequence(&current_literal);
+    }
 }
 
 fn resolve_variables(text: &str, is_send_keys: bool) -> String {
@@ -87,16 +130,8 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
         }
         "send_keys" => {
             let keys = config.get("keys").cloned().unwrap_or_default();
-            let script = format!(
-                "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::Send('{}')",
-                keys.replace("'", "''").replace("{CLIPBOARD}", "^v")
-            );
-            
-            let _ = std::process::Command::new("powershell")
-                .args(&["-NoProfile", "-NonInteractive", "-Command", &script])
-                .creation_flags(CREATE_NO_WINDOW)
-                .status();
-                
+            let mut enigo = Enigo::new();
+            send_keys_str(&mut enigo, &keys);
             Ok("Keys sent".to_string())
         }
         "clipboard_set" => {

@@ -29,3 +29,4 @@ codegen-units = 1    # better optimization at the cost of compile time
 panic = "abort"      # no unwinding tables → smaller binary, less RAM
 strip = true         # strip symbols from the final binary
 incremental = false
+enigo = "0.1"
