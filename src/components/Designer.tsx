@@ -70,11 +70,11 @@ export default function Designer(p: DesignerProps) {
   const [showHelp, setShowHelp] = useState(false);
   const PALETTE_GROUPS: Array<{id:string, label:string, icon:string, kinds: NodeKind[]}> = [
     {id:'triggers', label:'TRIGGERS', icon:'zap', kinds:['hotkey','window_focus','schedule','startup','clipboard']},
-    {id:'input', label:'Entrada', icon:'type', kinds:['send_keys','mouse_click','mouse_move']},
-    {id:'system', label:'Sistema', icon:'monitor', kinds:['open_app','close_app','focus_window','open_url','take_screenshot']},
-    {id:'logic', label:'Flujo', icon:'branch', kinds:['delay','condition','repeat']},
-    {id:'ui', label:'Notificación', icon:'bell', kinds:['notification','play_sound']},
-    {id:'data', label:'Datos & Red', icon:'globe', kinds:['clipboard_set','http_request','file_write','web_search','powershell']},
+    {id:'input', label:'Input', icon:'type', kinds:['send_keys','mouse_click','mouse_move']},
+    {id:'system', label:'System', icon:'monitor', kinds:['open_app','close_app','focus_window','open_url','take_screenshot']},
+    {id:'logic', label:'Flow', icon:'branch', kinds:['delay','condition','repeat']},
+    {id:'ui', label:'Notification', icon:'bell', kinds:['notification','play_sound']},
+    {id:'data', label:'Data & Network', icon:'globe', kinds:['clipboard_set','http_request','file_write','web_search','powershell']},
   ];
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(()=>{
     try { const raw = JSON.parse(localStorage.getItem('macroflow.palette.collapsed')||'[]'); return new Set(raw); } catch { return new Set(['system','ui','data']); }
@@ -366,7 +366,7 @@ export default function Designer(p: DesignerProps) {
             <Icon name="layers" size={11} /> Grid
           </button>
           <button onClick={p.onAutoLayout} title="Auto-layout" className="flex items-center gap-1.5 bg-surface border border-line hover:bg-brand/10 hover:border-brand/40 text-ink-2 hover:text-brand text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors">
-            <Icon name="nodes" size={11} /> <span className="hidden sm:inline">Ordenar</span>
+            <Icon name="nodes" size={11} /> <span className="hidden sm:inline">Arrange</span>
           </button>
           <button onClick={handleFitView} title="Fit view" className="hidden sm:grid w-7 h-7 place-items-center rounded-lg border border-line bg-surface hover:bg-brand/10 hover:text-brand text-ink-2">
             <Icon name="move" size={12} />
@@ -375,7 +375,7 @@ export default function Designer(p: DesignerProps) {
           <button onClick={()=> setShowMinimap(v=>!v)} title="Toggle minimap" className={`w-7 h-7 grid place-items-center rounded-lg border ${showMinimap? 'bg-brand text-white border-brand' : 'bg-surface border-line text-ink-2'} `}>
             <Icon name="monitor" size={12} />
           </button>
-          <button onClick={()=> setShowHelp(v=>!v)} title="Atajos" className={`w-7 h-7 grid place-items-center rounded-lg border text-[11px] font-black ${showHelp? 'bg-brand text-white border-brand':'bg-surface border-line text-ink-2 hover:bg-elevated'}`}>?</button>
+          <button onClick={()=> setShowHelp(v=>!v)} title="Shortcuts" className={`w-7 h-7 grid place-items-center rounded-lg border text-[11px] font-black ${showHelp? 'bg-brand text-white border-brand':'bg-surface border-line text-ink-2 hover:bg-elevated'}`}>?</button>
           <button onClick={() => p.onExportFlow(p.flowId)} className="flex items-center gap-1.5 bg-surface border border-line hover:bg-brand/10 hover:border-brand/40 text-ink-2 hover:text-brand text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-colors" title="Export this flow">
             <Icon name="upload" size={11} /> <span className="hidden sm:inline">Export</span>
           </button>
@@ -394,34 +394,34 @@ export default function Designer(p: DesignerProps) {
           <div className="p-2 border-b border-line space-y-2">
             <div className="relative">
               <Icon name="search" size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none" />
-              <input value={showPaletteSearch} onChange={e=> setShowPaletteSearch(e.target.value)} placeholder={`Buscar nodo… (${PALETTE.length})`} className="w-full text-[11px] border border-line rounded-lg pl-7 pr-7 py-1.5 bg-surface text-ink placeholder:text-ink-3 focus:outline-none focus:border-brand" />
+              <input value={showPaletteSearch} onChange={e=> setShowPaletteSearch(e.target.value)} placeholder={`Search nodes… (${PALETTE.length})`} className="w-full text-[11px] border border-line rounded-lg pl-7 pr-7 py-1.5 bg-surface text-ink placeholder:text-ink-3 focus:outline-none focus:border-brand" />
               {showPaletteSearch && <button onClick={()=> setShowPaletteSearch('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 w-5 h-5 grid place-items-center rounded hover:bg-ink/10 text-ink-3"><Icon name="x" size={10} /></button>}
             </div>
             <div className="flex items-center justify-between text-[10px]">
-              <span className="text-ink-3 font-medium">{showPaletteSearch.trim() ? `${filteredPalette.length} resultados` : `${PALETTE.length} nodos`}</span>
+              <span className="text-ink-3 font-medium">{showPaletteSearch.trim() ? `${filteredPalette.length} results` : `${PALETTE.length} nodes`}</span>
               <div className="flex gap-1">
-                <button onClick={()=> setCollapsedGroups(new Set())} className="px-1.5 py-0.5 rounded border border-line bg-surface hover:bg-brand/10 hover:text-brand" title="Expandir todo">⛶</button>
-                <button onClick={()=> setCollapsedGroups(new Set(['fav','recent', ...PALETTE_GROUPS.map(g=>g.id)]))} className="px-1.5 py-0.5 rounded border border-line bg-surface hover:bg-brand/10 hover:text-brand" title="Colapsar todo">▭</button>
+                <button onClick={()=> setCollapsedGroups(new Set())} className="px-1.5 py-0.5 rounded border border-line bg-surface hover:bg-brand/10 hover:text-brand" title="Expand all">⛶</button>
+                <button onClick={()=> setCollapsedGroups(new Set(['fav','recent', ...PALETTE_GROUPS.map(g=>g.id)]))} className="px-1.5 py-0.5 rounded border border-line bg-surface hover:bg-brand/10 hover:text-brand" title="Collapse all">▭</button>
               </div>
             </div>
-            {p.selectedIds.length>1 && <div className="text-[10px] bg-brand/10 text-brand border border-brand/20 rounded-md px-2 py-1 text-center font-semibold">{p.selectedIds.length} seleccionados · arrastra para mover<br/><span className="font-normal text-[10px]">Ctrl+C / Ctrl+V · Delete</span></div>}
+            {p.selectedIds.length>1 && <div className="text-[10px] bg-brand/10 text-brand border border-brand/20 rounded-md px-2 py-1 text-center font-semibold">{p.selectedIds.length} selected · drag to move<br/><span className="font-normal text-[10px]">Ctrl+C / Ctrl+V · Delete</span></div>}
           </div>
           <div className="flex-1 overflow-auto custom-scrollbar p-2 space-y-2">
             {showPaletteSearch.trim() !== '' ? (
               <div className="space-y-1.5">
-                <div className="text-[9.5px] font-bold tracking-[0.14em] text-ink-3 px-1 pb-1">RESULTADOS · {filteredPalette.length}</div>
+                <div className="text-[9.5px] font-bold tracking-[0.14em] text-ink-3 px-1 pb-1">RESULTS · {filteredPalette.length}</div>
                 {filteredPalette.map(x=> <PaletteButton key={x.kind} item={x} isFav={favKinds.has(x.kind)} onToggleFav={()=> toggleFav(x.kind)} onAdd={()=> p.onAddNode(x.kind)} />)}
-                {filteredPalette.length===0 && <div className="text-[11px] text-ink-3 text-center py-6">Sin resultados para “{showPaletteSearch}”</div>}
+                {filteredPalette.length===0 && <div className="text-[11px] text-ink-3 text-center py-6">No results for “{showPaletteSearch}”</div>}
               </div>
             ) : (
               <>
                 {favPalette.length>0 && (
-                  <PaletteGroup id="fav" label="FAVORITOS" icon="type" count={favPalette.length} collapsed={collapsedGroups.has('fav')} onToggle={()=> toggleGroup('fav')}>
+                  <PaletteGroup id="fav" label="FAVORITES" icon="type" count={favPalette.length} collapsed={collapsedGroups.has('fav')} onToggle={()=> toggleGroup('fav')}>
                     {favPalette.map(x=> <PaletteButton key={`fav-${x.kind}`} item={x} isFav={true} onToggleFav={()=> toggleFav(x.kind)} onAdd={() => p.onAddNode(x.kind)} />)}
                   </PaletteGroup>
                 )}
                 {recentPalette.length>0 && (
-                  <PaletteGroup id="recent" label="RECIENTES" icon="clock" count={Math.min(5, recentPalette.length)} collapsed={collapsedGroups.has('recent')} onToggle={()=> toggleGroup('recent')}>
+                  <PaletteGroup id="recent" label="RECENTS" icon="clock" count={Math.min(5, recentPalette.length)} collapsed={collapsedGroups.has('recent')} onToggle={()=> toggleGroup('recent')}>
                     {recentPalette.slice(0,5).map(x=> <PaletteButton key={`rec-${x.kind}`} item={x} isFav={favKinds.has(x.kind)} onToggleFav={()=> toggleFav(x.kind)} onAdd={() => p.onAddNode(x.kind)} />)}
                   </PaletteGroup>
                 )}
@@ -437,7 +437,7 @@ export default function Designer(p: DesignerProps) {
             )}
           </div>
           <div className="p-2 border-t border-line text-[10px] text-ink-3 text-center flex items-center justify-center gap-1.5">
-            <Icon name="layers" size={10} /> {PALETTE_GROUPS.length} grupos · Ctrl+K
+            <Icon name="layers" size={10} /> {PALETTE_GROUPS.length} groups · Ctrl+K
           </div>
         </div>
 
@@ -865,21 +865,21 @@ export default function Designer(p: DesignerProps) {
           <div className="absolute inset-0 bg-ink/30 backdrop-blur-[2px]" onClick={()=> setShowHelp(false)} />
           <div className="relative bg-surface rounded-2xl shadow-pop border border-line w-full max-w-[480px] p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-[14px] font-bold text-ink flex items-center gap-2"><Icon name="info" size={16}/> Atajos Designer</h3>
+              <h3 className="text-[14px] font-bold text-ink flex items-center gap-2"><Icon name="info" size={16}/> Designer Shortcuts</h3>
               <button onClick={()=> setShowHelp(false)} className="w-7 h-7 grid place-items-center rounded-full hover:bg-elevated text-ink-2"><Icon name="x" size={14}/></button>
             </div>
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+Z / Ctrl+Y</kbd><span className="text-ink-2">Undo / Redo</span>
               <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+K</kbd><span className="text-ink-2">Command palette</span>
               <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Shift+Click</kbd><span className="text-ink-2">Multi-select</span>
-              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Arrastrar fondo</kbd><span className="text-ink-2">Box select</span>
-              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+C / V</kbd><span className="text-ink-2">Copiar / Pegar</span>
-              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+D</kbd><span className="text-ink-2">Duplicar nodo</span>
-              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Del</kbd><span className="text-ink-2">Borrar</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Drag background</kbd><span className="text-ink-2">Box select</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+C / V</kbd><span className="text-ink-2">Copy / Paste</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+D</kbd><span className="text-ink-2">Duplicate node</span>
+              <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Del</kbd><span className="text-ink-2">Delete</span>
               <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Ctrl+Wheel</kbd><span className="text-ink-2">Zoom</span>
               <kbd className="bg-elevated border border-line rounded px-2 py-1 font-mono">Middle-drag</kbd><span className="text-ink-2">Pan</span>
             </div>
-            <div className="text-[10px] text-ink-3 text-center border-t border-line pt-3">Arrastra puertos para conectar · Click en edge para borrar · Grid snap 20px · ? para cerrar</div>
+            <div className="text-[10px] text-ink-3 text-center border-t border-line pt-3">Drag ports to connect · Click edge to delete · Grid snap 20px · ? to close</div>
           </div>
         </div>
       )}

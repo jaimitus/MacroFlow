@@ -47,8 +47,8 @@ export default function CommandPalette({ open, onClose, onAddNode, onAutoLayout,
     const acts: CommandAction[] = [
       { id: 'undo', label: 'Undo', desc: 'Ctrl+Z', icon: 'refresh', run: () => { onUndo?.(); onClose(); } },
       { id: 'redo', label: 'Redo', desc: 'Ctrl+Y', icon: 'refresh', run: () => { onRedo?.(); onClose(); } },
-      { id: 'autolayout', label: 'Auto-layout', desc: 'Ordenar nodos', icon: 'nodes', run: () => { onAutoLayout?.(); onClose(); } },
-      { id: 'duplicate', label: 'Duplicate Flow', desc: 'Clonar flow actual', icon: 'copy', run: () => { onDuplicateFlow?.(); onClose(); } },
+      { id: 'autolayout', label: 'Auto-layout', desc: 'Arrange nodes', icon: 'nodes', run: () => { onAutoLayout?.(); onClose(); } },
+      { id: 'duplicate', label: 'Duplicate Flow', desc: 'Clone current flow', icon: 'copy', run: () => { onDuplicateFlow?.(); onClose(); } },
     ];
     if (!query) return acts;
     const q = query.toLowerCase();
@@ -67,7 +67,7 @@ export default function CommandPalette({ open, onClose, onAddNode, onAutoLayout,
             autoFocus
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Buscar nodo o acción…  (ej. http, loop, ordenar)"
+            placeholder="Search node or action… (e.g. http, loop, layout)"
             className="flex-1 bg-transparent outline-none text-[13px] text-ink placeholder:text-ink-3"
           />
           <span className="text-[10px] font-mono bg-elevated border border-line px-1.5 py-0.5 rounded text-ink-3">ESC</span>
@@ -76,7 +76,7 @@ export default function CommandPalette({ open, onClose, onAddNode, onAutoLayout,
         <div className="overflow-auto custom-scrollbar p-2 space-y-3">
           {actions.length > 0 && (
             <div>
-              <div className="text-[10px] font-bold tracking-[0.12em] text-ink-3 px-2 py-1">ACCIONES</div>
+              <div className="text-[10px] font-bold tracking-[0.12em] text-ink-3 px-2 py-1">ACTIONS</div>
               <div className="space-y-1">
                 {actions.map(a => (
                   <button
@@ -96,7 +96,7 @@ export default function CommandPalette({ open, onClose, onAddNode, onAutoLayout,
           )}
 
           <div>
-            <div className="text-[10px] font-bold tracking-[0.12em] text-ink-3 px-2 py-1">NODOS — {paletteFiltered.length}</div>
+            <div className="text-[10px] font-bold tracking-[0.12em] text-ink-3 px-2 py-1">NODES — {paletteFiltered.length}</div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
               {paletteFiltered.map(p => (
                 <button
@@ -111,13 +111,13 @@ export default function CommandPalette({ open, onClose, onAddNode, onAutoLayout,
                   </span>
                 </button>
               ))}
-              {paletteFiltered.length === 0 && <div className="col-span-2 py-6 text-center text-[12px] text-ink-3">Sin resultados para “{query}”</div>}
+              {paletteFiltered.length === 0 && <div className="col-span-2 py-6 text-center text-[12px] text-ink-3">No results for “{query}”</div>}
             </div>
           </div>
         </div>
 
         <div className="px-3 py-2 bg-elevated border-t border-line flex items-center gap-2 text-[10.5px] text-ink-3">
-          <span className="hidden sm:inline">↵ Añadir</span><span className="hidden sm:inline">·</span><span>Ctrl+K para abrir</span><span className="ml-auto font-mono">{paletteFiltered.length} nodos</span>
+          <span className="hidden sm:inline">↵ Add</span><span className="hidden sm:inline">·</span><span>Ctrl+K to open</span><span className="ml-auto font-mono">{paletteFiltered.length} nodes</span>
         </div>
       </div>
     </div>
