@@ -88,7 +88,7 @@ fn execute_node(kind: String, mut config: std::collections::HashMap<String, Stri
         "send_keys" => {
             let keys = config.get("keys").cloned().unwrap_or_default();
             let script = format!(
-                "(New-Object -ComObject WScript.Shell).SendKeys('{}')",
+                "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::Send('{}')",
                 keys.replace("'", "''").replace("{CLIPBOARD}", "^v")
             );
             
